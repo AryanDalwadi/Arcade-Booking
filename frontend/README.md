@@ -2,6 +2,8 @@
 
 React app with MUI, custom form components, and JWT authentication.
 
+Part of the [Arcade-Booking](https://github.com/AryanDalwadi/Arcade-Booking) monorepo (`frontend/` folder).
+
 ## Setup
 
 ```bash
@@ -17,7 +19,3 @@ App runs at `http://localhost:3000`.
 | Variable | Default |
 |----------|---------|
 | `REACT_APP_API_URL` | `http://localhost:5000/api` |
-
-## Related repo
-
-Backend API: [Arcade-Booking-Backend](https://github.com/AryanDalwadi/Arcade-Booking-Backend)

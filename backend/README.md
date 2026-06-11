@@ -2,6 +2,8 @@
 
 Node.js + Express API with MSSQL, JWT auth, and stored procedure migrations.
 
+Part of the [Arcade-Booking](https://github.com/AryanDalwadi/Arcade-Booking) monorepo (`backend/` folder).
+
 ## Setup
 
 ```bash
