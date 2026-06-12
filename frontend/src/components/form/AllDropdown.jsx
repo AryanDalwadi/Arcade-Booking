@@ -8,6 +8,7 @@ const AllDropdown = ({
   onChange,
   options = [],
   allLabel = 'All',
+  allValue = ALL_VALUE,
   fullWidth = true,
   size = 'small',
   disabled = false,
@@ -19,10 +20,10 @@ const AllDropdown = ({
       labelId={`${name || label}-label`}
       id={name || label}
       label={label}
-      value={value ?? ALL_VALUE}
+      value={value ?? allValue}
       onChange={(event) => onChange(event.target.value)}
     >
-      <MenuItem value={ALL_VALUE}>{allLabel}</MenuItem>
+      <MenuItem value={allValue}>{allLabel}</MenuItem>
       {options.map((option) => (
         <MenuItem key={option.value} value={option.value}>
           {option.label}

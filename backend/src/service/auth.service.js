@@ -26,17 +26,17 @@ const register = async ({ name, email, password }) => {
   };
 };
 
-const login = async ({ email, password }) => {
-  const user = await userDa.findByEmail(email);
+const login = async ({ login, password }) => {
+  const user = await userDa.findByLogin(login);
 
   if (!user) {
-    throw new AppError('Invalid email or password', 401);
+    throw new AppError('Invalid username, email or password', 401);
   }
 
   const isMatch = await comparePassword(password, user.password_hash);
 
   if (!isMatch) {
-    throw new AppError('Invalid email or password', 401);
+    throw new AppError('Invalid username, email or password', 401);
   }
 
   const token = signToken({ id: user.id, email: user.email });

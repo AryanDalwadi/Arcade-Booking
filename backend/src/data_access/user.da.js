@@ -10,6 +10,16 @@ const findByEmail = async (email) => {
   return result.recordset[0] || null;
 };
 
+const findByLogin = async (login) => {
+  const pool = getPool();
+  const result = await pool
+    .request()
+    .input('login', sql.NVarChar(255), login)
+    .execute('dbo.Get_User_By_Login');
+
+  return result.recordset[0] || null;
+};
+
 const createUser = async ({ name, email, passwordHash, createdBy = null }) => {
   const pool = getPool();
   const result = await pool
@@ -60,6 +70,7 @@ const updateUser = async ({ id, name, email, passwordHash, updatedBy = null }) =
 
 module.exports = {
   findByEmail,
+  findByLogin,
   createUser,
   getUsers,
   updateUser,

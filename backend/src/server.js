@@ -20,8 +20,21 @@ const startServer = async () => {
     });
   }
 
-  server = app.listen(env.PORT, () => {
+  server = app.listen(env.PORT);
+
+  server.on('listening', () => {
     logger.info(`Server running on port ${env.PORT}`);
+  });
+
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      logger.error(`Port ${env.PORT} is already in use`, {
+        hint: `Another backend is already running. Stop it first: netstat -ano | findstr :${env.PORT}`,
+      });
+    } else {
+      logger.error('Failed to start server', { message: error.message });
+    }
+    process.exit(1);
   });
 };
 

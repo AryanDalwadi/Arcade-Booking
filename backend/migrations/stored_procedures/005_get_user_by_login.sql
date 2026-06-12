@@ -1,0 +1,23 @@
+USE arcade_booking;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.Get_User_By_Login
+  @login NVARCHAR(255)
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  SELECT
+    id,
+    name,
+    email,
+    password_hash,
+    created_at,
+    created_by,
+    updated_at,
+    updated_by
+  FROM dbo.users
+  WHERE LOWER(email) = LOWER(@login)
+     OR LOWER(name) = LOWER(@login);
+END
+GO

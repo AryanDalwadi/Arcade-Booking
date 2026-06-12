@@ -5,6 +5,8 @@ import Dashboard from '../pages/Dashboard';
 import Login from '../pages/Login';
 import ProductList from '../pages/ProductList';
 import PurchaseScreen from '../pages/PurchaseScreen';
+import UserGroupList from '../pages/UserGroupList';
+import UserList from '../pages/UserList';
 import ProtectedRoute from './ProtectedRoute';
 
 const AppRoutes = () => (
@@ -15,6 +17,8 @@ const AppRoutes = () => (
       <Route element={<MainLayout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/products" element={<ProductList />} />
+        <Route path="/users" element={<UserList />} />
+        <Route path="/user-groups" element={<UserGroupList />} />
         <Route path="/billing" element={<BillingScreen />} />
         <Route path="/purchase" element={<PurchaseScreen />} />
       </Route>
