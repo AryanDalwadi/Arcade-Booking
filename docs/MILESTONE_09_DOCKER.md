@@ -92,7 +92,7 @@ docker image ls arcade-booking-booking
 
 - Compose still tags images `latest` locally; pass `GIT_SHA` as a build arg
   when you want the label on the image
-- No image scan in this milestone (CI is next)
+- No image signing in this milestone (CI scans; attestations are later)
 - Postgres/Kafka/Redis use version tags, not digests
 - Single-host Compose, not a cluster
 

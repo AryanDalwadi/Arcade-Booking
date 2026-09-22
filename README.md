@@ -70,6 +70,7 @@ milestone guides, [admin and customer portal guide](docs/ADMIN_CUSTOMER_PORTALS.
 [Redis guide](docs/MILESTONE_07_REDIS.md),
 [Twelve-Factor guide](docs/MILESTONE_08_TWELVE_FACTOR.md),
 [Docker guide](docs/MILESTONE_09_DOCKER.md),
+[CI/CD guide](docs/MILESTONE_10_CICD.md),
 and [interview guide](docs/INTERVIEW_GUIDE.md). Infrastructure files are
 educational deployment starters; they do not imply that an AWS environment has
 already been provisioned.

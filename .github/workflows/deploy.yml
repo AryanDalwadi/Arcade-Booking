@@ -1,5 +1,7 @@
 name: Deploy (gated skeleton)
 
+# Educational only. This workflow does not deploy Kubernetes or AWS unless
+# a GitHub Environment is configured, DEPLOY_ENABLED=true, and confirm=deploy.
 on:
   workflow_dispatch:
     inputs:
@@ -21,6 +23,17 @@ permissions:
   id-token: write
 
 jobs:
+  explain:
+    name: Explain the deployment gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: This is not a live deploy
+        run: |
+          echo "Milestone 10 keeps deploy as a skeleton."
+          echo "The apply job runs only when confirm=deploy AND vars.DEPLOY_ENABLED=true"
+          echo "AND AWS/EKS variables are set on a GitHub Environment."
+          echo "Requested environment=${{ inputs.environment }} tag=${{ inputs.image_tag }}"
+
   deploy:
     if: inputs.confirm == 'deploy' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
