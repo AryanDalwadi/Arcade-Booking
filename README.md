@@ -39,8 +39,8 @@ packages/
   service-auth/           Shared JWT claim and role middleware
 infra/
   docker/                 Local integrated environment
-  kubernetes/             Kubernetes manifests
-  aws/                    AWS deployment starter and mapping
+  k8s/                    Kubernetes manifests (learning target)
+  aws/                    AWS target map (Terraform; not a live account)
 docs/                     Learning and interview guides
 backend/                   Legacy backend retained during migration
 frontend/                  Legacy frontend retained during migration
@@ -71,6 +71,9 @@ milestone guides, [admin and customer portal guide](docs/ADMIN_CUSTOMER_PORTALS.
 [Twelve-Factor guide](docs/MILESTONE_08_TWELVE_FACTOR.md),
 [Docker guide](docs/MILESTONE_09_DOCKER.md),
 [CI/CD guide](docs/MILESTONE_10_CICD.md),
+[Kubernetes guide](docs/MILESTONE_11_KUBERNETES.md),
+[AWS map](docs/MILESTONE_12_AWS.md),
+[SQL vs DynamoDB](docs/MILESTONE_13_DYNAMODB.md),
 and [interview guide](docs/INTERVIEW_GUIDE.md). Infrastructure files are
 educational deployment starters; they do not imply that an AWS environment has
 already been provisioned.

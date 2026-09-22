@@ -15,6 +15,7 @@ const services = [
   ['catalog', 'CATALOG_SERVICE_URL'],
   ['booking', 'BOOKING_SERVICE_URL'],
   ['payment', 'PAYMENT_SERVICE_URL'],
+  ['analytics', 'ANALYTICS_SERVICE_URL'],
 ] as const;
 
 export function createApp(
@@ -42,8 +43,13 @@ export function createApp(
     credentials: true,
     exposedHeaders: ['x-correlation-id', 'RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset'],
   }));
-  app.use(rateLimit({ store, windowMs: config.RATE_LIMIT_WINDOW_MS, max: config.RATE_LIMIT_MAX }));
-
+  app.get('/health/live', (_request, response) => {
+    response.json({
+      status: 'ok',
+      service: 'api-gateway',
+      timestamp: new Date().toISOString(),
+    });
+  });
   app.get('/health', (_request, response) => {
     if (!isAccepting()) {
       response.status(503).json({
@@ -60,6 +66,7 @@ export function createApp(
       timestamp: new Date().toISOString(),
     });
   });
+  app.use(rateLimit({ store, windowMs: config.RATE_LIMIT_WINDOW_MS, max: config.RATE_LIMIT_MAX }));
 
   app.use(verifyJwt(config));
   const staffOrAdmin = requireAnyRole('ADMIN', 'STAFF');
@@ -74,6 +81,7 @@ export function createApp(
       ? staffOrAdmin(request, response, next)
       : next());
   app.use('/api/payment', staffOrAdmin);
+  app.use('/api/analytics', staffOrAdmin);
 
   for (const [name, configKey] of services) {
     const prefix = `/api/${name}`;

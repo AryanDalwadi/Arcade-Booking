@@ -1,0 +1,12 @@
+# Example remote state. Copy to backend.tf only when you have an AWS account
+# and encrypted state. Milestone 12 does not create this bucket.
+#
+# terraform {
+#   backend "s3" {
+#     bucket         = "YOUR_TFSTATE_BUCKET"
+#     key            = "arcade/dev/terraform.tfstate"
+#     region         = "ap-south-1"
+#     dynamodb_table = "YOUR_TFSTATE_LOCK"
+#     encrypt        = true
+#   }
+# }

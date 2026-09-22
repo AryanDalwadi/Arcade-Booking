@@ -48,5 +48,5 @@ USER node
 EXPOSE 8080
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
-  CMD node -e "fetch('http://127.0.0.1:8080/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:8080/health/live').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
 CMD ["node", "dist/server.js"]

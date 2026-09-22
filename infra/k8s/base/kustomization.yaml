@@ -7,35 +7,38 @@ resources:
   - workloads.yaml
   - ingress.yaml
   - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
 labels:
   - pairs:
       app.kubernetes.io/part-of: arcade-booking
     includeSelectors: true
+# Overlays replace OWNER and the git SHA. Never promote :latest.
 images:
   - name: arcade/web
     newName: ghcr.io/OWNER/arcade-web
-    newTag: latest
+    newTag: replace-me-with-git-sha
   - name: arcade/gateway
     newName: ghcr.io/OWNER/arcade-gateway
-    newTag: latest
+    newTag: replace-me-with-git-sha
   - name: arcade/identity
     newName: ghcr.io/OWNER/arcade-identity
-    newTag: latest
+    newTag: replace-me-with-git-sha
   - name: arcade/catalog
     newName: ghcr.io/OWNER/arcade-catalog
-    newTag: latest
+    newTag: replace-me-with-git-sha
   - name: arcade/booking
     newName: ghcr.io/OWNER/arcade-booking
-    newTag: latest
+    newTag: replace-me-with-git-sha
   - name: arcade/payment
     newName: ghcr.io/OWNER/arcade-payment
-    newTag: latest
+    newTag: replace-me-with-git-sha
   - name: arcade/notification
     newName: ghcr.io/OWNER/arcade-notification
-    newTag: latest
+    newTag: replace-me-with-git-sha
   - name: arcade/inventory
     newName: ghcr.io/OWNER/arcade-inventory
-    newTag: latest
+    newTag: replace-me-with-git-sha
   - name: arcade/analytics
     newName: ghcr.io/OWNER/arcade-analytics
-    newTag: latest
+    newTag: replace-me-with-git-sha

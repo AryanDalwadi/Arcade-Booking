@@ -6,16 +6,18 @@ import { KafkaAdapter } from './adapters/kafka';
 import { RedisAdapter } from './adapters/redis';
 import { createHttpApp } from './http/app';
 import { analyticsRoutes, handleEvent } from './application/context';
+import { MemoryProjectionStore } from './projection/memory-store';
 
 const db = new Postgres(env.DATABASE_URL);
 const kafka = new KafkaAdapter(env.KAFKA_CLIENT_ID, env.KAFKA_BROKERS.split(',').map((x) => x.trim()));
 const redis = new RedisAdapter(env.REDIS_URL);
+const projection = env.ANALYTICS_PROJECTION === 'memory' ? new MemoryProjectionStore() : null;
 let dependencyReady = false;
 let acceptingTraffic = true;
 
 async function connectDependencies() {
   try {
-    await kafka.consume(['arcade.booking.created.v1','arcade.payment.completed.v1','arcade.payment.failed.v1','arcade.inventory.reserved.v1','arcade.inventory.rejected.v1'], (event) => handleEvent(db, event));
+    await kafka.consume(['arcade.booking.created.v1','arcade.payment.completed.v1','arcade.payment.failed.v1','arcade.inventory.reserved.v1','arcade.inventory.rejected.v1'], (event) => handleEvent(db, event, projection, env.ANALYTICS_VENUE_ID));
     dependencyReady = true;
   } catch (error) {
     dependencyReady = false;
@@ -30,7 +32,7 @@ const app = createHttpApp({
   dbReady: () => db.ready(),
   dependencyReady: () => dependencyReady,
   acceptingTraffic: () => acceptingTraffic,
-  routes: analyticsRoutes(db),
+  routes: analyticsRoutes(db, projection, env.ANALYTICS_VENUE_ID),
 });
 const server = createServer(app);
 server.listen(env.PORT, () => log('info', 'service.listen', {

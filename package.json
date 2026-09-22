@@ -23,7 +23,7 @@
     "pretest": "npm run build -w @arcade/contracts && npm run build -w @arcade/service-auth && npm run build -w @arcade/observability",
     "test": "npm run test --workspaces --if-present && npm run test:policies",
     "test:dockerfiles": "npm run test:policies",
-    "test:policies": "node --test infra/docker/policy.test.mjs infra/ci/policy.test.mjs",
+    "test:policies": "node --test infra/docker/policy.test.mjs infra/ci/policy.test.mjs infra/k8s/policy.test.mjs infra/aws/policy.test.mjs",
     "verify": "npm run typecheck && npm test && npm run build",
     "lint": "npm run typecheck",
     "compose:up": "docker compose -f infra/docker-compose.yml up --build",

@@ -10,7 +10,8 @@ const schema = z.object({
   KAFKA_CLIENT_ID: z.string().default('arcade-analytics'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-  
+  ANALYTICS_PROJECTION: z.enum(['off', 'memory']).default('memory'),
+  ANALYTICS_VENUE_ID: z.string().min(1).default('arcade'),
 });
 
 export type Env = z.infer<typeof schema>;

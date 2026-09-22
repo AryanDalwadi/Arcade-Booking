@@ -57,6 +57,15 @@ jobs:
         run: docker compose -f infra/docker-compose.yml config --quiet
       - name: Render Kubernetes base
         run: kubectl kustomize infra/k8s/base > /tmp/arcade-k8s.yaml
+      - name: Render AWS overlay (map only)
+        run: kubectl kustomize infra/k8s/overlays/aws > /tmp/arcade-k8s-aws.yaml
+      - name: Reject mutable latest tags in rendered manifests
+        run: |
+          if grep -E 'image:[[:space:]]*.*:latest([[:space:]]|$)' /tmp/arcade-k8s.yaml /tmp/arcade-k8s-aws.yaml; then
+            echo "::error::Rendered manifests must not use :latest"
+            exit 1
+          fi
+          echo "Rendered images use placeholder SHA tags, not latest"
       - name: Check Terraform formatting
         run: terraform -chdir=infra/aws fmt -check -recursive
       - name: Initialize Terraform providers

@@ -1,0 +1,32 @@
+# Template only — not included in Kustomize.
+# Apply once per release as a Job so replicas do not all migrate on boot.
+# Copy outside git, set IMAGE and SERVICE_PATH, then:
+#   kubectl apply -f migrate.job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: booking-migrate
+  namespace: arcade
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: migrate
+          image: arcade/booking:replace-me-with-git-sha
+          command: ["node", "services/booking/dist/config/migrate.js"]
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: arcade-secrets
+                  key: BOOKING_DATABASE_URL
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true

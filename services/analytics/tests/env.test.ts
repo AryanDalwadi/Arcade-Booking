@@ -6,6 +6,7 @@ describe('analytics environment', () => {
     const parsed = parseEnv({});
     expect(parsed.PORT).toBe(4007);
     expect(parsed.DATABASE_URL).toContain('arcade_analytics');
+    expect(parsed.ANALYTICS_PROJECTION).toBe('memory');
   });
 });
 

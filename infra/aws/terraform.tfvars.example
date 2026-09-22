@@ -1,0 +1,7 @@
+# Copy values locally if you ever plan a real account.
+# Milestone 12 leaves this false. Do not apply from the learning path.
+i_understand_this_creates_billable_aws_resources = false
+environment                                      = "dev"
+aws_region                                       = "ap-south-1"
+enable_dynamodb_analytics_projection             = false
+monthly_budget_usd                               = "50"

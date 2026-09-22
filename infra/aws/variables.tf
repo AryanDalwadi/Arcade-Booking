@@ -42,7 +42,19 @@ variable "deletion_protection" {
 }
 
 variable "enable_dynamodb_analytics_projection" {
-  description = "Create the optional derived analytics read model. PostgreSQL remains the source of truth."
+  description = "Create the optional derived analytics read model. PostgreSQL remains the source of truth. Milestone 13."
+  type        = bool
+  default     = false
+}
+
+variable "monthly_budget_usd" {
+  description = "Proposed monthly cost cap. Does not stop resources by itself; pair with billing alarms."
+  type        = string
+  default     = "50"
+}
+
+variable "i_understand_this_creates_billable_aws_resources" {
+  description = "Must be true to plan/apply. Leave false for Milestone 12 (map only)."
   type        = bool
   default     = false
 }
