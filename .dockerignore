@@ -12,3 +12,13 @@
 *.tfstate
 *.tfstate.*
 .terraform
+backend
+frontend
+docs
+infra/kubernetes
+infra/aws
+**/*.test.ts
+**/*.test.tsx
+**/tests
+agent-transcripts
+*.md

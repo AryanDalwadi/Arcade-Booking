@@ -8,6 +8,7 @@ export const eventTypes = {
   inventoryRejected: 'arcade.inventory.rejected.v1',
   paymentCompleted: 'arcade.payment.completed.v1',
   paymentFailed: 'arcade.payment.failed.v1',
+  deadLetter: 'arcade.dead-letter.v1',
 } as const;
 
 export const eventTypeSchema = z.enum(Object.values(eventTypes));
@@ -33,6 +34,39 @@ export const createEventEnvelopeSchema = <T extends z.ZodType>(
 export type EventEnvelope<T = unknown> = Omit<z.infer<typeof eventEnvelopeSchema>, 'payload'> & {
   payload: T;
 };
+
+/** Same booking stays on one Kafka partition so its saga events stay ordered. */
+export function eventPartitionKey(event: unknown): string {
+  if (!event || typeof event !== 'object') return 'unknown';
+  const envelope = event as {
+    eventId?: unknown;
+    payload?: { bookingId?: unknown; id?: unknown };
+  };
+  const payload = envelope.payload;
+  const bookingId = payload && typeof payload === 'object'
+    ? payload.bookingId ?? payload.id
+    : undefined;
+  if (typeof bookingId === 'string' && bookingId.length > 0) return bookingId;
+  if (typeof envelope.eventId === 'string' && envelope.eventId.length > 0) return envelope.eventId;
+  return 'unknown';
+}
+
+export const deadLetterEventSchema = z.object({
+  eventId: z.uuid(),
+  eventType: z.literal(eventTypes.deadLetter),
+  version: z.literal(1),
+  occurredAt: z.iso.datetime(),
+  correlationId: z.string().min(1),
+  producer: z.string().min(1),
+  payload: z.object({
+    originalTopic: z.string().min(1),
+    originalPartition: z.number().int().nonnegative(),
+    originalOffset: z.string().min(1),
+    attempts: z.number().int().positive(),
+    error: z.string().min(1),
+    originalEvent: z.unknown(),
+  }),
+});
 
 export const apiErrorSchema = z.object({
   success: z.literal(false),

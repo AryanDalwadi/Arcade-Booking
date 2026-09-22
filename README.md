@@ -66,6 +66,10 @@ files locally and never commit secrets.
 
 Start with [the learning roadmap](docs/LEARNING_ROADMAP.md), then use the
 milestone guides, [admin and customer portal guide](docs/ADMIN_CUSTOMER_PORTALS.md),
+[Kafka guide](docs/MILESTONE_06_KAFKA.md),
+[Redis guide](docs/MILESTONE_07_REDIS.md),
+[Twelve-Factor guide](docs/MILESTONE_08_TWELVE_FACTOR.md),
+[Docker guide](docs/MILESTONE_09_DOCKER.md),
 and [interview guide](docs/INTERVIEW_GUIDE.md). Infrastructure files are
 educational deployment starters; they do not imply that an AWS environment has
 already been provisioned.

@@ -13,12 +13,17 @@ afterEach(async () => {
       server.close((error) => error ? reject(error) : resolve()))));
 });
 
-async function serve(query: ReturnType<typeof vi.fn>): Promise<string> {
+async function serve(
+  query: ReturnType<typeof vi.fn>,
+  redisOverrides: Partial<RedisAdapter> = {},
+): Promise<{ origin: string; redis: RedisAdapter }> {
   const db = { query } as unknown as Postgres;
   const redis = {
     get: vi.fn(async () => null),
     set: vi.fn(async () => undefined),
     delete: vi.fn(async () => undefined),
+    isReady: () => true,
+    ...redisOverrides,
   } as unknown as RedisAdapter;
   const app = createHttpApp({
     dbReady: async () => true,
@@ -28,13 +33,13 @@ async function serve(query: ReturnType<typeof vi.fn>): Promise<string> {
   const server = createServer(app).listen(0);
   servers.push(server);
   await new Promise<void>((resolve) => server.once('listening', resolve));
-  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  return { origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, redis };
 }
 
 describe('catalog authorization', () => {
   it('allows authenticated customers to browse but denies mutations', async () => {
     const query = vi.fn(async () => ({ rows: [], rowCount: 0 }));
-    const origin = await serve(query);
+    const { origin } = await serve(query);
     const headers = {
       'content-type': 'application/json',
       'x-auth-subject': '10000000-0000-4000-8000-000000000001',
@@ -53,7 +58,7 @@ describe('catalog authorization', () => {
       rows: [{ id: '20000000-0000-4000-8000-000000000001', name: 'Racer', status: 'ACTIVE' }],
       rowCount: 1,
     }));
-    const origin = await serve(query);
+    const { origin } = await serve(query);
     const response = await fetch(`${origin}/v1/machines`, {
       method: 'POST',
       headers: {
@@ -64,5 +69,37 @@ describe('catalog authorization', () => {
       body: JSON.stringify({ name: 'Racer', status: 'ACTIVE' }),
     });
     expect(response.status).toBe(201);
+  });
+});
+
+describe('catalog cache-aside', () => {
+  const headers = {
+    'x-auth-subject': '10000000-0000-4000-8000-000000000001',
+    'x-auth-roles': 'CUSTOMER',
+  };
+
+  it('returns a cache hit without querying PostgreSQL', async () => {
+    const machines = [{ id: '20000000-0000-4000-8000-000000000001', name: 'Racer' }];
+    const query = vi.fn();
+    const { origin } = await serve(query, {
+      get: vi.fn(async () => JSON.stringify(machines)),
+    });
+    const response = await fetch(`${origin}/v1/machines`, { headers });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ cache: 'hit', data: machines });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('falls back to PostgreSQL when Redis is down', async () => {
+    const rows = [{ id: '20000000-0000-4000-8000-000000000001', name: 'Racer' }];
+    const query = vi.fn(async () => ({ rows, rowCount: 1 }));
+    const { origin } = await serve(query, {
+      get: vi.fn(async () => null),
+      isReady: () => false,
+    });
+    const response = await fetch(`${origin}/v1/machines`, { headers });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ cache: 'bypass', data: rows });
+    expect(query).toHaveBeenCalled();
   });
 });

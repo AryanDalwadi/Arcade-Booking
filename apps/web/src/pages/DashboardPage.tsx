@@ -13,15 +13,27 @@ export function DashboardPage({ portal }: { portal: 'customer' | 'admin' }) {
   const { bookings, listStatus } = useAppSelector((state) => state.bookings);
   const { users, usersStatus } = useAppSelector((state) => state.identity);
   const userId = useAppSelector((state) => state.auth.user?.id);
+  const visibleBookings = portal === 'admin'
+    ? bookings
+    : bookings.filter((booking) => booking.userId === userId);
 
   useEffect(() => {
     void api<{ status: string }>('/health')
       .then(() => setHealth('Online'))
       .catch(() => setHealth('Offline'));
-    if (catalogStatus === 'idle') void dispatch(fetchMachines());
-    if (portal === 'admin' && usersStatus === 'idle') void dispatch(fetchUsers());
-    if (listStatus === 'idle') void dispatch(fetchBookings(portal === 'admin' ? undefined : userId));
-  }, [catalogStatus, dispatch, listStatus, portal, userId, usersStatus]);
+  }, []);
+
+  useEffect(() => {
+    void dispatch(fetchMachines());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (portal === 'admin') void dispatch(fetchUsers());
+  }, [dispatch, portal]);
+
+  useEffect(() => {
+    void dispatch(fetchBookings(portal === 'admin' ? undefined : userId));
+  }, [dispatch, portal, userId]);
 
   const statuses = portal === 'admin'
     ? [catalogStatus, usersStatus, listStatus]
@@ -39,7 +51,7 @@ export function DashboardPage({ portal }: { portal: 'customer' | 'admin' }) {
         <Stat label="Gateway" value={health} accent />
         {portal === 'admin' && <Stat label="Players" value={loading ? '—' : String(users.length)} />}
         <Stat label="Machines ready" value={loading ? '—' : String(machines.filter((machine) => machine.status === 'ACTIVE').length)} />
-        <Stat label={portal === 'admin' ? 'All bookings' : 'My bookings'} value={loading ? '—' : String(bookings.length)} />
+        <Stat label={portal === 'admin' ? 'All bookings' : 'My bookings'} value={loading ? '—' : String(visibleBookings.length)} />
       </div>
       {loading && <ResourceMessage kind="loading">Syncing live platform data…</ResourceMessage>}
       {failed && <ResourceMessage kind="error">Some dashboard data could not be loaded. Open its page to retry.</ResourceMessage>}

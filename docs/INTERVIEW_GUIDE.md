@@ -328,6 +328,8 @@ it during requests to prove draining.
 
 ## 9. Docker
 
+See the hands-on guide: [Milestone 9 Docker](./MILESTONE_09_DOCKER.md).
+
 **Definition:** Docker builds layered immutable images and runs isolated
 processes from them.
 

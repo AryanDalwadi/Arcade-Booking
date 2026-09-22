@@ -67,7 +67,10 @@ export function rateLimit(options: { store: RateLimitStore; windowMs: number; ma
       }
       next();
     } catch (error) {
-      next(error);
+      // Fail-open: a Redis outage must not take the arcade API down.
+      // Abuse protection degrades until Redis recovers.
+      console.error('[gateway:rate-limit]', error instanceof Error ? error.message : error);
+      next();
     }
   };
 }

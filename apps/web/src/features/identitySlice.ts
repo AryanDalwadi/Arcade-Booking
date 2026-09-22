@@ -1,6 +1,7 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import type { ApiSuccess, User, UserGroup } from '@arcade/contracts';
 import { api } from '../api';
+import { logout } from './authSlice';
 
 type ResourceStatus = 'idle' | 'loading' | 'succeeded' | 'failed';
 type IdentityState = {
@@ -147,6 +148,10 @@ const identitySlice = createSlice({
           state.membershipStatus = 'failed';
           state.membershipError = action.error.message ?? 'Could not update group membership';
         },
+      )
+      .addMatcher(
+        (action) => action.type === logout.type,
+        () => initialState,
       );
   },
 });

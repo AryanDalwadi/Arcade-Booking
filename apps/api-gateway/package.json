@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@arcade/contracts": "1.0.0",
+    "@arcade/observability": "1.0.0",
     "@arcade/service-auth": "1.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",

@@ -1,6 +1,7 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import type { ApiSuccess, Booking, CreateBookingRequest } from '@arcade/contracts';
 import { api } from '../api';
+import { logout } from './authSlice';
 
 type BookingState = {
   bookings: Booking[];
@@ -94,7 +95,8 @@ const bookingsSlice = createSlice({
       .addCase(createBooking.rejected, (state, action) => {
         state.createStatus = 'failed';
         state.createError = action.error.message ?? 'Could not create booking';
-      });
+      })
+      .addCase(logout, () => initialState);
   },
 });
 

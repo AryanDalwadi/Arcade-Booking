@@ -17,7 +17,11 @@ const services = [
   ['payment', 'PAYMENT_SERVICE_URL'],
 ] as const;
 
-export function createApp(config: GatewayConfig, store: RateLimitStore = new MemoryRateLimitStore()) {
+export function createApp(
+  config: GatewayConfig,
+  store: RateLimitStore = new MemoryRateLimitStore(),
+  isAccepting: () => boolean = () => true,
+) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', config.TRUST_PROXY);
@@ -41,6 +45,14 @@ export function createApp(config: GatewayConfig, store: RateLimitStore = new Mem
   app.use(rateLimit({ store, windowMs: config.RATE_LIMIT_WINDOW_MS, max: config.RATE_LIMIT_MAX }));
 
   app.get('/health', (_request, response) => {
+    if (!isAccepting()) {
+      response.status(503).json({
+        status: 'draining',
+        service: 'api-gateway',
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
     response.json({
       status: 'ok',
       service: 'api-gateway',

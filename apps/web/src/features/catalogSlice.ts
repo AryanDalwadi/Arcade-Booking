@@ -1,6 +1,7 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import type { ApiSuccess, Machine } from '@arcade/contracts';
 import { api } from '../api';
+import { logout } from './authSlice';
 
 type CatalogState = {
   machines: Machine[];
@@ -70,7 +71,8 @@ const catalogSlice = createSlice({
       .addCase(createMachineWithPricing.rejected, (state, action) => {
         state.mutationStatus = 'failed';
         state.mutationError = action.error.message ?? 'Could not create machine';
-      });
+      })
+      .addCase(logout, () => initialState);
   },
 });
 

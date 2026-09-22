@@ -10,10 +10,16 @@ export function catalogRoutes(db: Postgres, redis: RedisAdapter): Router {
   const router = Router();
   router.get('/machines', requireAuth, async (_req, res) => {
     const cached = await redis.get(machinesCacheKey);
-    if (cached) return res.json({ success: true, data: JSON.parse(cached), cache: 'hit' });
+    if (cached) {
+      try {
+        return res.json({ success: true, data: JSON.parse(cached), cache: 'hit' });
+      } catch {
+        await redis.delete(machinesCacheKey);
+      }
+    }
     const rows = (await db.query('SELECT * FROM machines ORDER BY name')).rows;
     await redis.set(machinesCacheKey, JSON.stringify(rows), 60);
-    return res.json({ success: true, data: rows, cache: 'miss' });
+    return res.json({ success: true, data: rows, cache: redis.isReady() ? 'miss' : 'bypass' });
   });
   router.get('/machines/:machineId/quote', async (req, res) => {
     const durationMinutes = Number(req.query.durationMinutes);

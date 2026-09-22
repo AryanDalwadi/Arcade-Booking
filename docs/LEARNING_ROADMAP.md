@@ -386,6 +386,8 @@ perform a controlled replay.
 
 ## 7. Redis
 
+See the hands-on guide: [Milestone 7 Redis](./MILESTONE_07_REDIS.md).
+
 ### Definition
 
 Redis is an in-memory data store with low-latency keys, counters, expirations,
@@ -446,6 +448,8 @@ PostgreSQL.
 > documented fail-open or fail-closed policy for each use case.
 
 ## 8. Twelve-Factor Applications
+
+See the hands-on guide: [Milestone 8 Twelve-Factor](./MILESTONE_08_TWELVE_FACTOR.md).
 
 ### Definition
 
@@ -509,6 +513,8 @@ termination signal while requests are active to demonstrate graceful draining.
 > Redis, or object storage with clear ownership.
 
 ## 9. Docker
+
+See the hands-on guide: [Milestone 9 Docker](./MILESTONE_09_DOCKER.md).
 
 ### Definition
 

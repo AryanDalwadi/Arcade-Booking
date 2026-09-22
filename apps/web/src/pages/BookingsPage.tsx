@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { PageTitle, ResourceMessage } from '../components/ui';
 import { createBooking, fetchBookings } from '../features/bookingsSlice';
 import { fetchMachines } from '../features/catalogSlice';
+import { fetchUsers } from '../features/identitySlice';
 import { useAppDispatch, useAppSelector } from '../store';
 
 export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
@@ -12,14 +13,26 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
   const { machines, status: machinesStatus } = useAppSelector((state) => state.catalog);
+  const { users } = useAppSelector((state) => state.identity);
   const { bookings, listStatus, createStatus, listError, createError } =
     useAppSelector((state) => state.bookings);
   const availableMachines = machines.filter((machine) => machine.status === 'ACTIVE');
+  const visibleBookings = useMemo(
+    () => portal === 'admin' ? bookings : bookings.filter((booking) => booking.userId === user?.id),
+    [bookings, portal, user?.id],
+  );
 
   useEffect(() => {
-    if (machinesStatus === 'idle') void dispatch(fetchMachines());
-    if (listStatus === 'idle') void dispatch(fetchBookings(portal === 'admin' ? undefined : user?.id));
-  }, [dispatch, listStatus, machinesStatus, portal, user?.id]);
+    void dispatch(fetchMachines());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (portal === 'admin') void dispatch(fetchUsers());
+  }, [dispatch, portal]);
+
+  useEffect(() => {
+    void dispatch(fetchBookings(portal === 'admin' ? undefined : user?.id));
+  }, [dispatch, portal, user?.id]);
 
   useEffect(() => {
     if (!machineId && availableMachines[0]) setMachineId(availableMachines[0].id);
@@ -74,14 +87,14 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
             {listError} <button className="text-button" onClick={() => void dispatch(fetchBookings(portal === 'admin' ? undefined : user?.id))}>Retry</button>
           </ResourceMessage>
         )}
-        {listStatus === 'succeeded' && bookings.length === 0 && <ResourceMessage kind="empty">You have no bookings yet.</ResourceMessage>}
-        {bookings.length > 0 && (
+        {listStatus === 'succeeded' && visibleBookings.length === 0 && <ResourceMessage kind="empty">You have no bookings yet.</ResourceMessage>}
+        {visibleBookings.length > 0 && (
           <div className="panel table-wrap">
             <table>
               <thead><tr>{portal === 'admin' && <th>User</th>}<th>Machine</th><th>Start</th><th>Duration</th><th>Amount</th><th>Status</th></tr></thead>
-              <tbody>{bookings.map((booking) => (
+              <tbody>{visibleBookings.map((booking) => (
                 <tr key={booking.id}>
-                  {portal === 'admin' && <td>{booking.userId}</td>}
+                  {portal === 'admin' && <td>{userLabel(booking.userId, users)}</td>}
                   <td>{machines.find((machine) => machine.id === booking.machineId)?.name ?? booking.machineId}</td>
                   <td>{new Date(booking.startAt).toLocaleString()}</td>
                   <td>{booking.durationMinutes} min</td>
@@ -95,6 +108,11 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
       </section>
     </>
   );
+}
+
+function userLabel(userId: string, users: { id: string; displayName: string; email: string }[]): string {
+  const match = users.find((candidate) => candidate.id === userId);
+  return match ? `${match.displayName} (${match.email})` : userId;
 }
 
 function formatMoney(amountCents: number, currency: string): string {
