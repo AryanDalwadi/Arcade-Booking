@@ -1,0 +1,91 @@
+name: Deploy (gated skeleton)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment containing deployment approvals and variables
+        type: environment
+        required: true
+      image_tag:
+        description: Immutable image tag (normally a tested commit SHA)
+        type: string
+        required: true
+      confirm:
+        description: Type "deploy" to enable the guarded job
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: inputs.confirm == 'deploy' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+      POSTGRES_HOST: ${{ vars.POSTGRES_HOST }}
+      KAFKA_BROKERS: ${{ vars.KAFKA_BROKERS }}
+      REDIS_URL: ${{ vars.REDIS_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require configured environment
+        shell: bash
+        run: |
+          for name in AWS_DEPLOY_ROLE_ARN AWS_REGION EKS_CLUSTER_NAME ECR_REGISTRY POSTGRES_HOST KAFKA_BROKERS REDIS_URL; do
+            [[ -n "${!name}" ]] || { echo "::error::$name is not configured"; exit 1; }
+          done
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.31.0
+      - uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: "5.5.0"
+      - name: Connect to EKS
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+      - name: Build environment overlay
+        shell: bash
+        run: |
+          mkdir -p infra/k8s/.deploy-overlay
+          cat > infra/k8s/.deploy-overlay/kustomization.yaml <<EOF
+          apiVersion: kustomize.config.k8s.io/v1beta1
+          kind: Kustomization
+          namespace: arcade
+          resources:
+            - ../base
+          images:
+          $(for service in web gateway identity catalog booking payment notification inventory analytics; do
+            printf '  - name: arcade/%s\n    newName: %s/arcade-%s-%s\n    newTag: %s\n' \
+              "$service" "$ECR_REGISTRY" "${{ inputs.environment }}" "$service" "${{ inputs.image_tag }}"
+          done)
+          configMapGenerator:
+            - name: arcade-config
+              behavior: merge
+              literals:
+                - POSTGRES_HOST=$POSTGRES_HOST
+                - KAFKA_BROKERS=$KAFKA_BROKERS
+                - REDIS_URL=$REDIS_URL
+          EOF
+          kustomize build infra/k8s/.deploy-overlay > /tmp/arcade-rendered.yaml
+      - name: Apply manifests
+        run: kubectl apply --server-side --field-manager=github-actions -f /tmp/arcade-rendered.yaml
+      - name: Wait for workloads
+        shell: bash
+        run: |
+          for service in web gateway identity catalog booking payment notification inventory analytics; do
+            kubectl -n arcade rollout status "deployment/$service" --timeout=5m
+          done

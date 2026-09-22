@@ -1,22 +1,19 @@
-USE arcade_booking;
-GO
-
-CREATE OR ALTER PROCEDURE dbo.Get_User_By_Email
-  @email NVARCHAR(255)
-AS
-BEGIN
-  SET NOCOUNT ON;
-
-  SELECT
-    id,
-    name,
-    email,
-    password_hash,
-    created_at,
-    created_by,
-    updated_at,
-    updated_by
-  FROM dbo.users
-  WHERE email = @email;
-END
-GO
+CREATE OR REPLACE FUNCTION dbo.get_user_by_email(p_email VARCHAR(255))
+RETURNS TABLE (
+  id INTEGER,
+  name VARCHAR(100),
+  email VARCHAR(255),
+  password_hash VARCHAR(255),
+  created_at TIMESTAMP,
+  created_by INTEGER,
+  updated_at TIMESTAMP,
+  updated_by INTEGER
+)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT u.id, u.name, u.email, u.password_hash,
+         u.created_at, u.created_by, u.updated_at, u.updated_by
+  FROM dbo.users u
+  WHERE u.email = p_email;
+$$;

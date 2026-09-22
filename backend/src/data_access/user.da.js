@@ -1,71 +1,80 @@
-const { getPool, sql } = require('../config/db');
+const { getPool } = require('../config/db');
 
 const findByEmail = async (email) => {
   const pool = getPool();
-  const result = await pool
-    .request()
-    .input('email', sql.NVarChar(255), email)
-    .execute('dbo.Get_User_By_Email');
+  const result = await pool.query(
+    'SELECT * FROM dbo.get_user_by_email($1)',
+    [email ?? null]
+  );
 
-  return result.recordset[0] || null;
+  return result.rows[0] || null;
 };
 
 const findByLogin = async (login) => {
   const pool = getPool();
-  const result = await pool
-    .request()
-    .input('login', sql.NVarChar(255), login)
-    .execute('dbo.Get_User_By_Login');
+  const result = await pool.query(
+    'SELECT * FROM dbo.get_user_by_login($1)',
+    [login]
+  );
 
-  return result.recordset[0] || null;
+  return result.rows[0] || null;
 };
 
 const createUser = async ({ name, email, passwordHash, createdBy = null }) => {
   const pool = getPool();
-  const result = await pool
-    .request()
-    .input('name', sql.NVarChar(100), name)
-    .input('email', sql.NVarChar(255), email)
-    .input('password_hash', sql.NVarChar(255), passwordHash)
-    .input('created_by', sql.Int, createdBy)
-    .execute('dbo.Create_User');
+  const result = await pool.query(
+    'SELECT * FROM dbo.create_user($1, $2, $3, $4)',
+    [name, email, passwordHash, createdBy]
+  );
 
-  return result.recordset[0];
+  return result.rows[0];
 };
 
 const getUsers = async ({ name = '', email = '', pageSize = 20, currentPage = 1 }) => {
   const pool = getPool();
-  const result = await pool
-    .request()
-    .input('name', sql.NVarChar(100), name)
-    .input('email', sql.NVarChar(255), email)
-    .input('page_size', sql.Int, pageSize)
-    .input('current_page', sql.Int, currentPage)
-    .execute('dbo.Get_User');
+  const normalizedPageSize = Math.max(Number(pageSize) || 20, 1);
+  const normalizedCurrentPage = Math.max(Number(currentPage) || 1, 1);
+
+  const [countResult, dataResult] = await Promise.all([
+    pool.query(
+      `SELECT count(1)::INTEGER AS total_count
+       FROM dbo.users
+       WHERE ($1 = '' OR name ILIKE '%' || $1 || '%')
+         AND ($2 = '' OR email ILIKE '%' || $2 || '%')`,
+      [name, email]
+    ),
+    pool.query(
+      `SELECT sr_no, id, name, email, insert_by, insert_by_val,
+              insert_datetime, update_by, update_by_val, update_datetime
+       FROM dbo.get_user($1, $2, $3, $4)`,
+      [name, email, normalizedPageSize, normalizedCurrentPage]
+    ),
+  ]);
+
+  const totalCount = countResult.rows[0]?.total_count || 0;
+  const totalPage = Math.ceil(totalCount / normalizedPageSize);
 
   return {
-    summary: result.recordsets[0][0] || null,
-    data: result.recordsets[1] || [],
+    summary: {
+      success: 1,
+      current_page: normalizedCurrentPage,
+      total_count: totalCount,
+      has_more: normalizedCurrentPage < totalPage,
+      page_size: normalizedPageSize,
+      total_page: totalPage,
+    },
+    data: dataResult.rows,
   };
 };
 
 const updateUser = async ({ id, name, email, passwordHash, updatedBy = null }) => {
   const pool = getPool();
-  const request = pool.request().input('id', sql.Int, id);
+  const result = await pool.query(
+    'SELECT * FROM dbo.update_user($1, $2, $3, $4, $5)',
+    [id, name ?? null, email ?? null, passwordHash ?? null, updatedBy]
+  );
 
-  if (name !== undefined) {
-    request.input('name', sql.NVarChar(100), name);
-  }
-  if (email !== undefined) {
-    request.input('email', sql.NVarChar(255), email);
-  }
-  if (passwordHash !== undefined) {
-    request.input('password_hash', sql.NVarChar(255), passwordHash);
-  }
-  request.input('updated_by', sql.Int, updatedBy);
-
-  const result = await request.execute('dbo.Update_User');
-  return result.recordset[0] || null;
+  return result.rows[0] || null;
 };
 
 module.exports = {

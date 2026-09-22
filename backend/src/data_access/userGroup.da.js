@@ -1,30 +1,25 @@
-const { getPool, sql } = require('../config/db');
+const { getPool } = require('../config/db');
 
 const findByGroupName = async (groupName) => {
   const pool = getPool();
-  const result = await pool
-    .request()
-    .input('group_name', sql.NVarChar(100), groupName)
-    .query(`
-      SELECT id, group_name
-      FROM dbo.user_groups
-      WHERE LOWER(group_name) = LOWER(@group_name)
-    `);
+  const result = await pool.query(
+    `SELECT id, group_name
+     FROM dbo.user_groups
+     WHERE LOWER(group_name) = LOWER($1)`,
+    [groupName]
+  );
 
-  return result.recordset[0] || null;
+  return result.rows[0] || null;
 };
 
 const createUserGroup = async ({ groupName, sysAdmin, status, createdBy = null }) => {
   const pool = getPool();
-  const result = await pool
-    .request()
-    .input('group_name', sql.NVarChar(100), groupName)
-    .input('sys_admin', sql.Bit, sysAdmin)
-    .input('status', sql.Int, status)
-    .input('created_by', sql.Int, createdBy)
-    .execute('dbo.Create_User_Group');
+  const result = await pool.query(
+    'SELECT * FROM dbo.create_user_group($1, $2, $3, $4)',
+    [groupName, Boolean(sysAdmin), status, createdBy]
+  );
 
-  return result.recordset[0];
+  return result.rows[0];
 };
 
 const getUserGroups = async ({
@@ -34,17 +29,39 @@ const getUserGroups = async ({
   currentPage = 1,
 }) => {
   const pool = getPool();
-  const result = await pool
-    .request()
-    .input('group_name', sql.NVarChar(100), groupName)
-    .input('status', sql.Int, status)
-    .input('page_size', sql.Int, pageSize)
-    .input('current_page', sql.Int, currentPage)
-    .execute('dbo.Get_User_Group');
+  const normalizedPageSize = Math.max(Number(pageSize) || 20, 1);
+  const normalizedCurrentPage = Math.max(Number(currentPage) || 1, 1);
+
+  const [countResult, dataResult] = await Promise.all([
+    pool.query(
+      `SELECT count(1)::INTEGER AS total_count
+       FROM dbo.user_groups
+       WHERE ($1 = '' OR group_name ILIKE '%' || $1 || '%')
+         AND ($2::INTEGER = 0 OR status = $2::INTEGER)`,
+      [groupName, status]
+    ),
+    pool.query(
+      `SELECT sr_no, id, group_name, sys_admin, status, insert_by,
+              insert_by_val, insert_datetime, update_by, update_by_val,
+              update_datetime
+       FROM dbo.get_user_group($1, $2, $3, $4)`,
+      [groupName, status, normalizedPageSize, normalizedCurrentPage]
+    ),
+  ]);
+
+  const totalCount = countResult.rows[0]?.total_count || 0;
+  const totalPage = Math.ceil(totalCount / normalizedPageSize);
 
   return {
-    summary: result.recordsets[0][0] || null,
-    data: result.recordsets[1] || [],
+    summary: {
+      success: 1,
+      current_page: normalizedCurrentPage,
+      total_count: totalCount,
+      has_more: normalizedCurrentPage < totalPage,
+      page_size: normalizedPageSize,
+      total_page: totalPage,
+    },
+    data: dataResult.rows,
   };
 };
 
@@ -56,21 +73,18 @@ const updateUserGroup = async ({
   updatedBy = null,
 }) => {
   const pool = getPool();
-  const request = pool.request().input('id', sql.UniqueIdentifier, id);
+  const result = await pool.query(
+    'SELECT * FROM dbo.update_user_group($1, $2, $3, $4, $5)',
+    [
+      id,
+      groupName ?? null,
+      sysAdmin === undefined ? null : Boolean(sysAdmin),
+      status ?? null,
+      updatedBy,
+    ]
+  );
 
-  if (groupName !== undefined) {
-    request.input('group_name', sql.NVarChar(100), groupName);
-  }
-  if (sysAdmin !== undefined) {
-    request.input('sys_admin', sql.Bit, sysAdmin);
-  }
-  if (status !== undefined) {
-    request.input('status', sql.Bit, status);
-  }
-  request.input('updated_by', sql.Int, updatedBy);
-
-  const result = await request.execute('dbo.Update_User_Group');
-  return result.recordset[0] || null;
+  return result.rows[0] || null;
 };
 
 module.exports = {

@@ -1,23 +1,4 @@
-USE arcade_booking;
-GO
-
-IF OBJECT_ID('dbo.users', 'U') IS NOT NULL
-AND COL_LENGTH('dbo.users', 'created_by') IS NULL
-BEGIN
-  ALTER TABLE dbo.users ADD created_by INT NULL;
-END
-GO
-
-IF OBJECT_ID('dbo.users', 'U') IS NOT NULL
-AND COL_LENGTH('dbo.users', 'updated_at') IS NULL
-BEGIN
-  ALTER TABLE dbo.users ADD updated_at DATETIME NULL;
-END
-GO
-
-IF OBJECT_ID('dbo.users', 'U') IS NOT NULL
-AND COL_LENGTH('dbo.users', 'updated_by') IS NULL
-BEGIN
-  ALTER TABLE dbo.users ADD updated_by INT NULL;
-END
-GO
+ALTER TABLE IF EXISTS dbo.users
+  ADD COLUMN IF NOT EXISTS created_by INTEGER NULL,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL,
+  ADD COLUMN IF NOT EXISTS updated_by INTEGER NULL;

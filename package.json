@@ -1,0 +1,61 @@
+{
+  "name": "arcade-booking-platform",
+  "version": "2.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "prebuild": "npm run build -w @arcade/contracts && npm run build -w @arcade/service-auth",
+    "build": "npm run build --workspaces --if-present",
+    "dev:gateway": "npm run dev -w @arcade/api-gateway",
+    "dev:web": "npm run dev -w @arcade/web",
+    "dev:services": "concurrently -n identity,catalog,booking,payment,notification,inventory,analytics \"npm run dev -w @arcade/identity-service\" \"npm run dev -w @arcade/catalog-service\" \"npm run dev -w @arcade/booking-service\" \"npm run dev -w @arcade/payment-service\" \"npm run dev -w @arcade/notification-service\" \"npm run dev -w @arcade/inventory-service\" \"npm run dev -w @arcade/analytics-service\"",
+    "dev": "concurrently -n web,gateway,services \"npm run dev:web\" \"npm run dev:gateway\" \"npm run dev:services\"",
+    "pretypecheck": "npm run build -w @arcade/contracts && npm run build -w @arcade/service-auth",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "pretest": "npm run build -w @arcade/contracts && npm run build -w @arcade/service-auth",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run typecheck",
+    "compose:up": "docker compose -f infra/docker-compose.yml up --build",
+    "compose:down": "docker compose -f infra/docker-compose.yml down",
+    "compose:reset": "docker compose -f infra/docker-compose.yml down --volumes",
+    "legacy:backend": "npm start --prefix backend",
+    "legacy:frontend": "npm start --prefix frontend"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^24.5.2",
+    "@types/pg": "^8.15.5",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.3",
+    "concurrently": "^9.2.1",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "http-proxy-middleware": "^3.0.5",
+    "ioredis": "^5.7.0",
+    "jsonwebtoken": "^9.0.2",
+    "kafkajs": "^2.2.4",
+    "pg": "^8.16.3",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zod": "^4.1.11"
+  }
+}

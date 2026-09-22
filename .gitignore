@@ -1,6 +1,26 @@
 node_modules/
 .env
+.env.*
+!.env.example
 error.log
 *.log
 backend/error.log
 frontend/build/
+dist/
+build/
+coverage/
+.vite/
+.turbo/
+
+# Local infrastructure state and secrets
+*.tfstate
+*.tfstate.*
+.terraform/
+infra/kubernetes/**/secret.yaml
+infra/kubernetes/**/secrets.yaml
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,27 +1,7 @@
-USE arcade_booking;
-GO
-
-SET ANSI_NULLS ON;
-GO
-
-SET QUOTED_IDENTIFIER ON;
-GO
-
-CREATE OR ALTER FUNCTION dbo.get_fromated_datetime(@in_time DATETIME)
-RETURNS NVARCHAR(50)
-AS
-BEGIN
-  DECLARE @datetime NVARCHAR(50);
-
-  IF @in_time IS NULL
-  BEGIN
-    SET @datetime = '';
-  END
-  ELSE
-  BEGIN
-    SET @datetime = FORMAT(@in_time, 'dd-MM-yyyy hh:mm:ss tt');
-  END
-
-  RETURN @datetime;
-END
-GO
+CREATE OR REPLACE FUNCTION dbo.get_fromated_datetime(in_time TIMESTAMP)
+RETURNS VARCHAR(50)
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT COALESCE(to_char(in_time, 'DD-MM-YYYY HH12:MI:SS AM'), '');
+$$;

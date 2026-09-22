@@ -1,0 +1,259 @@
+apiVersion: v1
+kind: List
+items:
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata: { name: web, labels: { app: web } }
+    spec:
+      replicas: 2
+      selector: { matchLabels: { app: web } }
+      template:
+        metadata: { labels: { app: web } }
+        spec:
+          securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          containers:
+            - name: web
+              image: arcade/web:latest
+              ports: [{ name: http, containerPort: 8080 }]
+              envFrom: [{ configMapRef: { name: arcade-config } }]
+              readinessProbe: { httpGet: { path: /, port: http }, initialDelaySeconds: 5, periodSeconds: 10 }
+              livenessProbe: { httpGet: { path: /, port: http }, initialDelaySeconds: 15, periodSeconds: 20 }
+              resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 256Mi } }
+              securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
+  - apiVersion: v1
+    kind: Service
+    metadata: { name: web }
+    spec: { selector: { app: web }, ports: [{ name: http, port: 80, targetPort: http }] }
+
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata: { name: gateway, labels: { app: gateway } }
+    spec:
+      replicas: 2
+      selector: { matchLabels: { app: gateway } }
+      template:
+        metadata: { labels: { app: gateway } }
+        spec:
+          securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          containers:
+            - name: gateway
+              image: arcade/gateway:latest
+              ports: [{ name: http, containerPort: 8080 }]
+              env: [{ name: PORT, value: "8080" }]
+              envFrom:
+                - configMapRef: { name: arcade-config }
+                - secretRef: { name: arcade-secrets, optional: true }
+              startupProbe: { httpGet: { path: /health, port: http }, failureThreshold: 30, periodSeconds: 5 }
+              readinessProbe: { httpGet: { path: /health, port: http }, periodSeconds: 10 }
+              livenessProbe: { httpGet: { path: /health, port: http }, periodSeconds: 20 }
+              resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
+              securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
+  - apiVersion: v1
+    kind: Service
+    metadata: { name: gateway }
+    spec: { selector: { app: gateway }, ports: [{ name: http, port: 80, targetPort: http }] }
+
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata: { name: identity, labels: { app: identity } }
+    spec:
+      replicas: 2
+      selector: { matchLabels: { app: identity } }
+      template:
+        metadata: { labels: { app: identity } }
+        spec:
+          securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          containers:
+            - name: identity
+              image: arcade/identity:latest
+              ports: [{ name: http, containerPort: 4101 }]
+              env:
+                - { name: PORT, value: "4101" }
+                - name: DATABASE_URL
+                  valueFrom: { secretKeyRef: { name: arcade-secrets, key: IDENTITY_DATABASE_URL } }
+              envFrom: &serviceEnv
+                - configMapRef: { name: arcade-config }
+                - secretRef: { name: arcade-secrets, optional: true }
+              startupProbe: &startup { httpGet: { path: /health/live, port: http }, failureThreshold: 30, periodSeconds: 5 }
+              readinessProbe: &ready { httpGet: { path: /health/ready, port: http }, periodSeconds: 10 }
+              livenessProbe: &live { httpGet: { path: /health/live, port: http }, periodSeconds: 20 }
+              resources: &serviceResources { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
+              securityContext: &containerSecurity { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
+  - apiVersion: v1
+    kind: Service
+    metadata: { name: identity }
+    spec: { selector: { app: identity }, ports: [{ name: http, port: 4101, targetPort: http }] }
+
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata: { name: catalog, labels: { app: catalog } }
+    spec:
+      replicas: 2
+      selector: { matchLabels: { app: catalog } }
+      template:
+        metadata: { labels: { app: catalog } }
+        spec:
+          securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          containers:
+            - name: catalog
+              image: arcade/catalog:latest
+              ports: [{ name: http, containerPort: 4102 }]
+              env:
+                - { name: PORT, value: "4102" }
+                - name: DATABASE_URL
+                  valueFrom: { secretKeyRef: { name: arcade-secrets, key: CATALOG_DATABASE_URL } }
+              envFrom: *serviceEnv
+              startupProbe: *startup
+              readinessProbe: *ready
+              livenessProbe: *live
+              resources: *serviceResources
+              securityContext: *containerSecurity
+  - apiVersion: v1
+    kind: Service
+    metadata: { name: catalog }
+    spec: { selector: { app: catalog }, ports: [{ name: http, port: 4102, targetPort: http }] }
+
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata: { name: booking, labels: { app: booking } }
+    spec:
+      replicas: 2
+      selector: { matchLabels: { app: booking } }
+      template:
+        metadata: { labels: { app: booking } }
+        spec:
+          securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          containers:
+            - name: booking
+              image: arcade/booking:latest
+              ports: [{ name: http, containerPort: 4103 }]
+              env:
+                - { name: PORT, value: "4103" }
+                - name: DATABASE_URL
+                  valueFrom: { secretKeyRef: { name: arcade-secrets, key: BOOKING_DATABASE_URL } }
+              envFrom: *serviceEnv
+              startupProbe: *startup
+              readinessProbe: *ready
+              livenessProbe: *live
+              resources: *serviceResources
+              securityContext: *containerSecurity
+  - apiVersion: v1
+    kind: Service
+    metadata: { name: booking }
+    spec: { selector: { app: booking }, ports: [{ name: http, port: 4103, targetPort: http }] }
+
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata: { name: payment, labels: { app: payment } }
+    spec:
+      replicas: 2
+      selector: { matchLabels: { app: payment } }
+      template:
+        metadata: { labels: { app: payment } }
+        spec:
+          securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          containers:
+            - name: payment
+              image: arcade/payment:latest
+              ports: [{ name: http, containerPort: 4104 }]
+              env:
+                - { name: PORT, value: "4104" }
+                - name: DATABASE_URL
+                  valueFrom: { secretKeyRef: { name: arcade-secrets, key: PAYMENT_DATABASE_URL } }
+              envFrom: *serviceEnv
+              startupProbe: *startup
+              readinessProbe: *ready
+              livenessProbe: *live
+              resources: *serviceResources
+              securityContext: *containerSecurity
+  - apiVersion: v1
+    kind: Service
+    metadata: { name: payment }
+    spec: { selector: { app: payment }, ports: [{ name: http, port: 4104, targetPort: http }] }
+
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata: { name: notification, labels: { app: notification } }
+    spec:
+      replicas: 2
+      selector: { matchLabels: { app: notification } }
+      template:
+        metadata: { labels: { app: notification } }
+        spec:
+          securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          containers:
+            - name: notification
+              image: arcade/notification:latest
+              ports: [{ name: http, containerPort: 4105 }]
+              env:
+                - { name: PORT, value: "4105" }
+                - name: DATABASE_URL
+                  valueFrom: { secretKeyRef: { name: arcade-secrets, key: NOTIFICATION_DATABASE_URL } }
+              envFrom: *serviceEnv
+              startupProbe: *startup
+              readinessProbe: *ready
+              livenessProbe: *live
+              resources: *serviceResources
+              securityContext: *containerSecurity
+  - apiVersion: v1
+    kind: Service
+    metadata: { name: notification }
+    spec: { selector: { app: notification }, ports: [{ name: http, port: 4105, targetPort: http }] }
+
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata: { name: inventory, labels: { app: inventory } }
+    spec:
+      replicas: 2
+      selector: { matchLabels: { app: inventory } }
+      template:
+        metadata: { labels: { app: inventory } }
+        spec:
+          securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          containers:
+            - name: inventory
+              image: arcade/inventory:latest
+              ports: [{ name: http, containerPort: 4106 }]
+              env:
+                - { name: PORT, value: "4106" }
+                - name: DATABASE_URL
+                  valueFrom: { secretKeyRef: { name: arcade-secrets, key: INVENTORY_DATABASE_URL } }
+              envFrom: *serviceEnv
+              startupProbe: *startup
+              readinessProbe: *ready
+              livenessProbe: *live
+              resources: *serviceResources
+              securityContext: *containerSecurity
+  - apiVersion: v1
+    kind: Service
+    metadata: { name: inventory }
+    spec: { selector: { app: inventory }, ports: [{ name: http, port: 4106, targetPort: http }] }
+
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata: { name: analytics, labels: { app: analytics } }
+    spec:
+      replicas: 2
+      selector: { matchLabels: { app: analytics } }
+      template:
+        metadata: { labels: { app: analytics } }
+        spec:
+          securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          containers:
+            - name: analytics
+              image: arcade/analytics:latest
+              ports: [{ name: http, containerPort: 4107 }]
+              env:
+                - { name: PORT, value: "4107" }
+                - name: DATABASE_URL
+                  valueFrom: { secretKeyRef: { name: arcade-secrets, key: ANALYTICS_DATABASE_URL } }
+              envFrom: *serviceEnv
+              startupProbe: *startup
+              readinessProbe: *ready
+              livenessProbe: *live
+              resources: *serviceResources
+              securityContext: *containerSecurity
+  - apiVersion: v1
+    kind: Service
+    metadata: { name: analytics }
+    spec: { selector: { app: analytics }, ports: [{ name: http, port: 4107, targetPort: http }] }

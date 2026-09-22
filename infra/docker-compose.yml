@@ -1,0 +1,316 @@
+name: arcade-booking
+
+x-node-service: &node-service
+  build:
+    context: ..
+    dockerfile: infra/docker/node.Dockerfile
+  restart: unless-stopped
+  networks: [application, data]
+  depends_on:
+    postgres:
+      condition: service_healthy
+    kafka-init:
+      condition: service_completed_successfully
+    redis:
+      condition: service_healthy
+  environment: &service-environment
+    NODE_ENV: production
+    KAFKA_BROKERS: kafka:9092
+    REDIS_URL: redis://redis:6379
+  healthcheck: &node-healthcheck
+    test:
+      [
+        "CMD",
+        "node",
+        "-e",
+        "fetch('http://127.0.0.1:' + process.env.PORT + '/health/live').then(r => { if (!r.ok) throw Error(r.status) })",
+      ]
+    interval: 15s
+    timeout: 5s
+    retries: 5
+    start_period: 30s
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    networks: [application, data]
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-local_admin_only}
+      POSTGRES_DB: postgres
+      # db:owner:password; the init script validates identifiers and quotes values.
+      POSTGRES_SERVICE_DATABASES: >-
+        identity:identity_app:${IDENTITY_DB_PASSWORD:-identity_local},
+        catalog:catalog_app:${CATALOG_DB_PASSWORD:-catalog_local},
+        booking:booking_app:${BOOKING_DB_PASSWORD:-booking_local},
+        payment:payment_app:${PAYMENT_DB_PASSWORD:-payment_local},
+        notification:notification_app:${NOTIFICATION_DB_PASSWORD:-notification_local},
+        inventory:inventory_app:${INVENTORY_DB_PASSWORD:-inventory_local},
+        analytics:analytics_app:${ANALYTICS_DB_PASSWORD:-analytics_local}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:3.9.1
+    restart: unless-stopped
+    networks: [data]
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    ports:
+      - "29092:29092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  kafka-init:
+    image: apache/kafka:3.9.1
+    networks: [data]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        for topic in \
+          arcade.booking.created.v1 \
+          arcade.booking.confirmed.v1 \
+          arcade.booking.payment-failed.v1 \
+          arcade.inventory.reserved.v1 \
+          arcade.inventory.rejected.v1 \
+          arcade.payment.completed.v1 \
+          arcade.payment.failed.v1
+        do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+            --topic "$$topic" --partitions 3 --replication-factor 1
+        done
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    networks: [data]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_GATEWAY_URL: http://localhost:4000
+    restart: unless-stopped
+    networks: [application]
+    ports: ["3000:8080"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  gateway:
+    <<: *node-service
+    build:
+      context: ..
+      dockerfile: apps/api-gateway/Dockerfile
+    environment:
+      <<: *service-environment
+      PORT: "8080"
+      JWT_SECRET: "${JWT_SECRET:-local-compose-secret-change-me-32-chars}"
+      JWT_ISSUER: arcade-identity
+      JWT_AUDIENCE: arcade-web
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173
+      IDENTITY_SERVICE_URL: http://identity:4101
+      CATALOG_SERVICE_URL: http://catalog:4102
+      BOOKING_SERVICE_URL: http://booking:4103
+      PAYMENT_SERVICE_URL: http://payment:4104
+      RATE_LIMIT_STORE: redis
+    ports: ["4000:8080"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r => { if (!r.ok) throw Error(r.status) })"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  identity:
+    <<: *node-service
+    build:
+      {
+        context: ..,
+        dockerfile: infra/docker/node.Dockerfile,
+        args:
+          {
+            WORKSPACE: "@arcade/identity-service",
+            SERVICE_PATH: services/identity,
+          },
+      }
+    environment:
+      {
+        <<: *service-environment,
+        PORT: "4101",
+        DATABASE_URL: "postgres://identity_app:${IDENTITY_DB_PASSWORD:-identity_local}@postgres:5432/identity",
+        JWT_SECRET: "${JWT_SECRET:-local-compose-secret-change-me-32-chars}",
+        JWT_ISSUER: arcade-identity,
+        JWT_AUDIENCE: arcade-web,
+        BOOTSTRAP_ADMIN_EMAIL: "${BOOTSTRAP_ADMIN_EMAIL:-milestone-ui-2259@example.com}",
+      }
+
+  catalog:
+    <<: *node-service
+    build:
+      {
+        context: ..,
+        dockerfile: infra/docker/node.Dockerfile,
+        args:
+          {
+            WORKSPACE: "@arcade/catalog-service",
+            SERVICE_PATH: services/catalog,
+          },
+      }
+    environment:
+      {
+        <<: *service-environment,
+        PORT: "4102",
+        DATABASE_URL: "postgres://catalog_app:${CATALOG_DB_PASSWORD:-catalog_local}@postgres:5432/catalog",
+      }
+
+  booking:
+    <<: *node-service
+    build:
+      {
+        context: ..,
+        dockerfile: infra/docker/node.Dockerfile,
+        args:
+          {
+            WORKSPACE: "@arcade/booking-service",
+            SERVICE_PATH: services/booking,
+          },
+      }
+    environment:
+      {
+        <<: *service-environment,
+        PORT: "4103",
+        DATABASE_URL: "postgres://booking_app:${BOOKING_DB_PASSWORD:-booking_local}@postgres:5432/booking",
+        CATALOG_SERVICE_URL: "http://catalog:4102",
+      }
+
+  payment:
+    <<: *node-service
+    build:
+      {
+        context: ..,
+        dockerfile: infra/docker/node.Dockerfile,
+        args:
+          {
+            WORKSPACE: "@arcade/payment-service",
+            SERVICE_PATH: services/payment,
+          },
+      }
+    environment:
+      {
+        <<: *service-environment,
+        PORT: "4104",
+        DATABASE_URL: "postgres://payment_app:${PAYMENT_DB_PASSWORD:-payment_local}@postgres:5432/payment",
+      }
+
+  notification:
+    <<: *node-service
+    build:
+      {
+        context: ..,
+        dockerfile: infra/docker/node.Dockerfile,
+        args:
+          {
+            WORKSPACE: "@arcade/notification-service",
+            SERVICE_PATH: services/notification,
+          },
+      }
+    environment:
+      {
+        <<: *service-environment,
+        PORT: "4105",
+        DATABASE_URL: "postgres://notification_app:${NOTIFICATION_DB_PASSWORD:-notification_local}@postgres:5432/notification",
+      }
+
+  inventory:
+    <<: *node-service
+    build:
+      {
+        context: ..,
+        dockerfile: infra/docker/node.Dockerfile,
+        args:
+          {
+            WORKSPACE: "@arcade/inventory-service",
+            SERVICE_PATH: services/inventory,
+          },
+      }
+    environment:
+      {
+        <<: *service-environment,
+        PORT: "4106",
+        DATABASE_URL: "postgres://inventory_app:${INVENTORY_DB_PASSWORD:-inventory_local}@postgres:5432/inventory",
+      }
+
+  analytics:
+    <<: *node-service
+    build:
+      {
+        context: ..,
+        dockerfile: infra/docker/node.Dockerfile,
+        args:
+          {
+            WORKSPACE: "@arcade/analytics-service",
+            SERVICE_PATH: services/analytics,
+          },
+      }
+    environment:
+      {
+        <<: *service-environment,
+        PORT: "4107",
+        DATABASE_URL: "postgres://analytics_app:${ANALYTICS_DB_PASSWORD:-analytics_local}@postgres:5432/analytics",
+      }
+
+networks:
+  application:
+  data:
+    internal: true
+
+volumes:
+  postgres-data:
+  kafka-data:
+  redis-data:

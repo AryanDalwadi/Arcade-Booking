@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: arcade
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - workloads.yaml
+  - ingress.yaml
+  - hpa.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: arcade-booking
+    includeSelectors: true
+images:
+  - name: arcade/web
+    newName: ghcr.io/OWNER/arcade-web
+    newTag: latest
+  - name: arcade/gateway
+    newName: ghcr.io/OWNER/arcade-gateway
+    newTag: latest
+  - name: arcade/identity
+    newName: ghcr.io/OWNER/arcade-identity
+    newTag: latest
+  - name: arcade/catalog
+    newName: ghcr.io/OWNER/arcade-catalog
+    newTag: latest
+  - name: arcade/booking
+    newName: ghcr.io/OWNER/arcade-booking
+    newTag: latest
+  - name: arcade/payment
+    newName: ghcr.io/OWNER/arcade-payment
+    newTag: latest
+  - name: arcade/notification
+    newName: ghcr.io/OWNER/arcade-notification
+    newTag: latest
+  - name: arcade/inventory
+    newName: ghcr.io/OWNER/arcade-inventory
+    newTag: latest
+  - name: arcade/analytics
+    newName: ghcr.io/OWNER/arcade-analytics
+    newTag: latest

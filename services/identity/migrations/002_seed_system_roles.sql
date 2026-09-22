@@ -1,0 +1,3 @@
+INSERT INTO user_groups(name)
+VALUES ('CUSTOMER'), ('STAFF'), ('ADMIN')
+ON CONFLICT(name) DO NOTHING;

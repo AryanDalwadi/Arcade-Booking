@@ -1,103 +1,65 @@
 const { env } = require('./env');
 const logger = require('../logger/logger');
-
-const sql = env.DB.useWindowsAuth
-  ? require('mssql/msnodesqlv8')
-  : require('mssql');
+const { Pool } = require('pg');
 
 let pool = null;
-
-const buildServerName = () => {
-  if (env.DB.instanceName) {
-    return `${env.DB.server}\\${env.DB.instanceName}`;
-  }
-  return env.DB.server;
-};
+let connected = false;
 
 const buildDbConfig = () => {
-  if (env.DB.useWindowsAuth) {
-    const server = buildServerName();
-    const trustCert = env.DB.trustServerCertificate ? 'yes' : 'no';
-    const encrypt = env.DB.encrypt ? 'yes' : 'no';
-
-    return {
-      connectionString: `Driver={${env.DB.odbcDriver}};Server=${server};Database=${env.DB.database};Trusted_Connection=yes;TrustServerCertificate=${trustCert};Encrypt=${encrypt};`,
-      connectionTimeout: 15000,
-      options: {
-        trustedConnection: true,
-        trustServerCertificate: env.DB.trustServerCertificate,
-        encrypt: env.DB.encrypt,
-      },
-      pool: {
-        max: 10,
-        min: 0,
-        idleTimeoutMillis: 30000,
-      },
-    };
-  }
-
-  const config = {
-    server: env.DB.server,
+  return {
+    host: env.DB.host,
+    port: env.DB.port,
     database: env.DB.database,
     user: env.DB.user,
     password: env.DB.password,
-    options: {
-      encrypt: env.DB.encrypt,
-      trustServerCertificate: env.DB.trustServerCertificate,
-      enableArithAbort: true,
-    },
-    connectionTimeout: 15000,
-    pool: {
-      max: 10,
-      min: 0,
-      idleTimeoutMillis: 30000,
-    },
+    ssl: env.DB.ssl ? { rejectUnauthorized: false } : false,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 15000,
   };
-
-  if (env.DB.port) {
-    config.port = env.DB.port;
-  }
-
-  if (env.DB.instanceName) {
-    config.options.instanceName = env.DB.instanceName;
-  }
-
-  return config;
 };
 
 const connectPool = async () => {
-  if (pool) {
+  if (pool && connected) {
     return pool;
   }
 
-  const dbConfig = buildDbConfig();
+  pool = new Pool(buildDbConfig());
+  pool.on('error', (error) => {
+    connected = false;
+    logger.error('Unexpected PostgreSQL pool error', { message: error.message });
+  });
 
   try {
-    pool = await sql.connect(dbConfig);
-    logger.info('MSSQL connection pool established', {
+    await pool.query('SELECT 1');
+    connected = true;
+    logger.info('PostgreSQL connection pool established', {
       database: env.DB.database,
-      server: env.DB.server,
-      auth: env.DB.useWindowsAuth ? 'windows' : 'sql',
+      host: env.DB.host,
+      port: env.DB.port,
     });
     return pool;
   } catch (error) {
-    logger.error('Failed to connect to MSSQL', {
+    await pool.end().catch(() => {});
+    pool = null;
+    connected = false;
+    logger.error('Failed to connect to PostgreSQL', {
       message: error.message,
-      server: env.DB.server,
-      auth: env.DB.useWindowsAuth ? 'windows' : 'sql',
+      host: env.DB.host,
+      port: env.DB.port,
     });
     throw error;
   }
 };
 
 const getPool = () => {
-  if (!pool) {
-    throw new Error('Database is not connected. Check MSSQL settings in .env and error.log.');
+  if (!pool || !connected) {
+    throw new Error('Database is not connected. Check PostgreSQL settings in .env and error.log.');
   }
   return pool;
 };
 
-const isConnected = () => Boolean(pool);
+const isConnected = () => Boolean(pool && connected);
 
 const closePool = async () => {
   if (!pool) {
@@ -105,17 +67,17 @@ const closePool = async () => {
   }
 
   try {
-    await pool.close();
+    await pool.end();
     pool = null;
-    logger.info('MSSQL connection pool closed');
+    connected = false;
+    logger.info('PostgreSQL connection pool closed');
   } catch (error) {
-    logger.error('Error closing MSSQL pool', { message: error.message });
+    logger.error('Error closing PostgreSQL pool', { message: error.message });
     throw error;
   }
 };
 
 module.exports = {
-  sql,
   connectPool,
   getPool,
   isConnected,

@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/build
+**/coverage
+.git
+.github
+.cursor
+.env
+.env.*
+!.env.example
+*.log
+*.tfstate
+*.tfstate.*
+.terraform
