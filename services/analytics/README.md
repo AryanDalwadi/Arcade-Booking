@@ -9,6 +9,7 @@ Build `packages/contracts` first, then run `npm install`, `npm run migrate`, and
 - Liveness: `GET /health/live`
 - Readiness: `GET /health/ready`
 - API base: `/v1`
+- Staff utilization: `GET /v1/utilization` (Dynamo-shaped projection; PostgreSQL `event_facts` is the log of record)
 
 Kafka/Redis startup failures are logged with the dependency name. The process remains alive where safe, but readiness stays false until required dependencies connect. SIGTERM/SIGINT stop HTTP acceptance and close adapters.
 

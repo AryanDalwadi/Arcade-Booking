@@ -1,3 +1,8 @@
+output "status" {
+  description = "This stack is a proposed map until someone deliberately applies it."
+  value       = "proposed-not-deployed"
+}
+
 output "eks_cluster_name" {
   value = module.eks.cluster_name
 }

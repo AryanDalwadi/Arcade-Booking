@@ -14,6 +14,7 @@ const envSchema = z.object({
   CATALOG_SERVICE_URL: z.string().url().default('http://localhost:4002'),
   BOOKING_SERVICE_URL: z.string().url().default('http://localhost:4003'),
   PAYMENT_SERVICE_URL: z.string().url().default('http://localhost:4004'),
+  ANALYTICS_SERVICE_URL: z.string().url().default('http://localhost:4007'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
   RATE_LIMIT_STORE: z.enum(['memory', 'redis']).default('memory'),

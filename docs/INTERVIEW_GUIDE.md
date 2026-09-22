@@ -410,6 +410,8 @@ block the proposed release.
 
 ## 11. Kubernetes
 
+See the hands-on guide: [Milestone 11 Kubernetes](./MILESTONE_11_KUBERNETES.md).
+
 **Definition:** Kubernetes reconciles declared workload state using resources
 such as Deployments, Services, configuration, probes, and Ingress.
 
@@ -449,6 +451,8 @@ update and verify traffic avoids the pod.
 
 ## 12. AWS target architecture
 
+See the hands-on guide: [Milestone 12 AWS](./MILESTONE_12_AWS.md).
+
 **Definition:** The target uses EKS compute, ECR images, RDS PostgreSQL, MSK
 Kafka, ElastiCache Redis, S3 objects, IAM authorization, VPC networking, ALB
 ingress, and CloudWatch observability.
@@ -487,6 +491,8 @@ policy list, recovery assumptions, alarms, and cost estimate without provisionin
 > architecture and I would not present it as deployed.
 
 ## 13. SQL vs NoSQL and DynamoDB analytics projection
+
+See the hands-on guide: [Milestone 13 SQL vs DynamoDB](./MILESTONE_13_DYNAMODB.md).
 
 **Definition:** SQL databases optimize relational integrity and flexible
 transactions; DynamoDB optimizes predefined key-value/document access patterns.

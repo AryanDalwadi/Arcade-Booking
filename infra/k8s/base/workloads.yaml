@@ -6,18 +6,30 @@ items:
     metadata: { name: web, labels: { app: web } }
     spec:
       replicas: 2
+      strategy: &rolling { type: RollingUpdate, rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
       selector: { matchLabels: { app: web } }
       template:
         metadata: { labels: { app: web } }
         spec:
+          terminationGracePeriodSeconds: 20
+          automountServiceAccountToken: false
           securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          volumes:
+            - { name: tmp, emptyDir: {} }
+            - { name: cache, emptyDir: {} }
+            - { name: run, emptyDir: {} }
           containers:
             - name: web
-              image: arcade/web:latest
+              image: arcade/web:placeholder
               ports: [{ name: http, containerPort: 8080 }]
               envFrom: [{ configMapRef: { name: arcade-config } }]
-              readinessProbe: { httpGet: { path: /, port: http }, initialDelaySeconds: 5, periodSeconds: 10 }
-              livenessProbe: { httpGet: { path: /, port: http }, initialDelaySeconds: 15, periodSeconds: 20 }
+              volumeMounts:
+                - { name: tmp, mountPath: /tmp }
+                - { name: cache, mountPath: /var/cache/nginx }
+                - { name: run, mountPath: /run }
+              startupProbe: { httpGet: { path: /, port: http }, failureThreshold: 12, periodSeconds: 5 }
+              readinessProbe: { httpGet: { path: /, port: http }, periodSeconds: 10 }
+              livenessProbe: { httpGet: { path: /, port: http }, periodSeconds: 20 }
               resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 256Mi } }
               securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
   - apiVersion: v1
@@ -30,24 +42,29 @@ items:
     metadata: { name: gateway, labels: { app: gateway } }
     spec:
       replicas: 2
+      strategy: *rolling
       selector: { matchLabels: { app: gateway } }
       template:
         metadata: { labels: { app: gateway } }
         spec:
+          terminationGracePeriodSeconds: 20
+          automountServiceAccountToken: false
           securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          volumes: &tmpVolumes [{ name: tmp, emptyDir: {} }]
           containers:
             - name: gateway
-              image: arcade/gateway:latest
+              image: arcade/gateway:placeholder
               ports: [{ name: http, containerPort: 8080 }]
               env: [{ name: PORT, value: "8080" }]
               envFrom:
                 - configMapRef: { name: arcade-config }
                 - secretRef: { name: arcade-secrets, optional: true }
-              startupProbe: { httpGet: { path: /health, port: http }, failureThreshold: 30, periodSeconds: 5 }
+              volumeMounts: &tmpMount [{ name: tmp, mountPath: /tmp }]
+              startupProbe: { httpGet: { path: /health/live, port: http }, failureThreshold: 30, periodSeconds: 5 }
               readinessProbe: { httpGet: { path: /health, port: http }, periodSeconds: 10 }
-              livenessProbe: { httpGet: { path: /health, port: http }, periodSeconds: 20 }
+              livenessProbe: { httpGet: { path: /health/live, port: http }, periodSeconds: 20 }
               resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
-              securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
+              securityContext: &containerSecurity { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
   - apiVersion: v1
     kind: Service
     metadata: { name: gateway }
@@ -58,14 +75,18 @@ items:
     metadata: { name: identity, labels: { app: identity } }
     spec:
       replicas: 2
+      strategy: *rolling
       selector: { matchLabels: { app: identity } }
       template:
         metadata: { labels: { app: identity } }
         spec:
+          terminationGracePeriodSeconds: 20
+          automountServiceAccountToken: false
           securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          volumes: *tmpVolumes
           containers:
             - name: identity
-              image: arcade/identity:latest
+              image: arcade/identity:placeholder
               ports: [{ name: http, containerPort: 4101 }]
               env:
                 - { name: PORT, value: "4101" }
@@ -74,11 +95,12 @@ items:
               envFrom: &serviceEnv
                 - configMapRef: { name: arcade-config }
                 - secretRef: { name: arcade-secrets, optional: true }
+              volumeMounts: *tmpMount
               startupProbe: &startup { httpGet: { path: /health/live, port: http }, failureThreshold: 30, periodSeconds: 5 }
               readinessProbe: &ready { httpGet: { path: /health/ready, port: http }, periodSeconds: 10 }
               livenessProbe: &live { httpGet: { path: /health/live, port: http }, periodSeconds: 20 }
               resources: &serviceResources { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
-              securityContext: &containerSecurity { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
+              securityContext: *containerSecurity
   - apiVersion: v1
     kind: Service
     metadata: { name: identity }
@@ -89,20 +111,25 @@ items:
     metadata: { name: catalog, labels: { app: catalog } }
     spec:
       replicas: 2
+      strategy: *rolling
       selector: { matchLabels: { app: catalog } }
       template:
         metadata: { labels: { app: catalog } }
         spec:
+          terminationGracePeriodSeconds: 20
+          automountServiceAccountToken: false
           securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          volumes: *tmpVolumes
           containers:
             - name: catalog
-              image: arcade/catalog:latest
+              image: arcade/catalog:placeholder
               ports: [{ name: http, containerPort: 4102 }]
               env:
                 - { name: PORT, value: "4102" }
                 - name: DATABASE_URL
                   valueFrom: { secretKeyRef: { name: arcade-secrets, key: CATALOG_DATABASE_URL } }
               envFrom: *serviceEnv
+              volumeMounts: *tmpMount
               startupProbe: *startup
               readinessProbe: *ready
               livenessProbe: *live
@@ -118,20 +145,25 @@ items:
     metadata: { name: booking, labels: { app: booking } }
     spec:
       replicas: 2
+      strategy: *rolling
       selector: { matchLabels: { app: booking } }
       template:
         metadata: { labels: { app: booking } }
         spec:
+          terminationGracePeriodSeconds: 20
+          automountServiceAccountToken: false
           securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          volumes: *tmpVolumes
           containers:
             - name: booking
-              image: arcade/booking:latest
+              image: arcade/booking:placeholder
               ports: [{ name: http, containerPort: 4103 }]
               env:
                 - { name: PORT, value: "4103" }
                 - name: DATABASE_URL
                   valueFrom: { secretKeyRef: { name: arcade-secrets, key: BOOKING_DATABASE_URL } }
               envFrom: *serviceEnv
+              volumeMounts: *tmpMount
               startupProbe: *startup
               readinessProbe: *ready
               livenessProbe: *live
@@ -147,20 +179,25 @@ items:
     metadata: { name: payment, labels: { app: payment } }
     spec:
       replicas: 2
+      strategy: *rolling
       selector: { matchLabels: { app: payment } }
       template:
         metadata: { labels: { app: payment } }
         spec:
+          terminationGracePeriodSeconds: 20
+          automountServiceAccountToken: false
           securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          volumes: *tmpVolumes
           containers:
             - name: payment
-              image: arcade/payment:latest
+              image: arcade/payment:placeholder
               ports: [{ name: http, containerPort: 4104 }]
               env:
                 - { name: PORT, value: "4104" }
                 - name: DATABASE_URL
                   valueFrom: { secretKeyRef: { name: arcade-secrets, key: PAYMENT_DATABASE_URL } }
               envFrom: *serviceEnv
+              volumeMounts: *tmpMount
               startupProbe: *startup
               readinessProbe: *ready
               livenessProbe: *live
@@ -176,20 +213,25 @@ items:
     metadata: { name: notification, labels: { app: notification } }
     spec:
       replicas: 2
+      strategy: *rolling
       selector: { matchLabels: { app: notification } }
       template:
         metadata: { labels: { app: notification } }
         spec:
+          terminationGracePeriodSeconds: 20
+          automountServiceAccountToken: false
           securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          volumes: *tmpVolumes
           containers:
             - name: notification
-              image: arcade/notification:latest
+              image: arcade/notification:placeholder
               ports: [{ name: http, containerPort: 4105 }]
               env:
                 - { name: PORT, value: "4105" }
                 - name: DATABASE_URL
                   valueFrom: { secretKeyRef: { name: arcade-secrets, key: NOTIFICATION_DATABASE_URL } }
               envFrom: *serviceEnv
+              volumeMounts: *tmpMount
               startupProbe: *startup
               readinessProbe: *ready
               livenessProbe: *live
@@ -205,20 +247,25 @@ items:
     metadata: { name: inventory, labels: { app: inventory } }
     spec:
       replicas: 2
+      strategy: *rolling
       selector: { matchLabels: { app: inventory } }
       template:
         metadata: { labels: { app: inventory } }
         spec:
+          terminationGracePeriodSeconds: 20
+          automountServiceAccountToken: false
           securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          volumes: *tmpVolumes
           containers:
             - name: inventory
-              image: arcade/inventory:latest
+              image: arcade/inventory:placeholder
               ports: [{ name: http, containerPort: 4106 }]
               env:
                 - { name: PORT, value: "4106" }
                 - name: DATABASE_URL
                   valueFrom: { secretKeyRef: { name: arcade-secrets, key: INVENTORY_DATABASE_URL } }
               envFrom: *serviceEnv
+              volumeMounts: *tmpMount
               startupProbe: *startup
               readinessProbe: *ready
               livenessProbe: *live
@@ -234,20 +281,25 @@ items:
     metadata: { name: analytics, labels: { app: analytics } }
     spec:
       replicas: 2
+      strategy: *rolling
       selector: { matchLabels: { app: analytics } }
       template:
         metadata: { labels: { app: analytics } }
         spec:
+          terminationGracePeriodSeconds: 20
+          automountServiceAccountToken: false
           securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          volumes: *tmpVolumes
           containers:
             - name: analytics
-              image: arcade/analytics:latest
+              image: arcade/analytics:placeholder
               ports: [{ name: http, containerPort: 4107 }]
               env:
                 - { name: PORT, value: "4107" }
                 - name: DATABASE_URL
                   valueFrom: { secretKeyRef: { name: arcade-secrets, key: ANALYTICS_DATABASE_URL } }
               envFrom: *serviceEnv
+              volumeMounts: *tmpMount
               startupProbe: *startup
               readinessProbe: *ready
               livenessProbe: *live

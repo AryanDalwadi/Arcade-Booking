@@ -106,6 +106,23 @@ describe('API gateway', () => {
     })).status).toBe(200);
   });
 
+  it('keeps analytics utilization on staff routes only', async () => {
+    const upstream = await serveUpstream((_request, response) => {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ success: true, data: { venueMinutes: 0 } }));
+    });
+    const secret = 'a-test-secret-with-32-characters';
+    const origin = await serve({ ANALYTICS_SERVICE_URL: upstream, JWT_SECRET: secret });
+    const customer = jwt.sign({ sub: 'customer-1', roles: ['CUSTOMER'] }, secret);
+    const staff = jwt.sign({ sub: 'staff-1', roles: ['STAFF'] }, secret);
+    expect((await fetch(`${origin}/api/analytics/utilization`, {
+      headers: { authorization: `Bearer ${customer}` },
+    })).status).toBe(403);
+    expect((await fetch(`${origin}/api/analytics/utilization`, {
+      headers: { authorization: `Bearer ${staff}` },
+    })).status).toBe(200);
+  });
+
   it('reserves identity group mutations for administrators', async () => {
     const secret = 'a-test-secret-with-32-characters';
     const origin = await serve({ JWT_SECRET: secret });
@@ -118,10 +135,21 @@ describe('API gateway', () => {
     expect(await response.json()).toMatchObject({ code: 'ROLE_REQUIRED' });
   });
 
+  it('keeps live healthy while readiness drains', async () => {
+    const server = createApp(config(), undefined, () => false).listen(0);
+    servers.push(server);
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    expect((await fetch(`${origin}/health/live`)).status).toBe(200);
+    const ready = await fetch(`${origin}/health`);
+    expect(ready.status).toBe(503);
+    expect(await ready.json()).toMatchObject({ status: 'draining', service: 'api-gateway' });
+  });
+
   it('limits repeated requests by client', async () => {
     const origin = await serve({ RATE_LIMIT_MAX: '1' });
-    expect((await fetch(`${origin}/health`)).status).toBe(200);
-    expect((await fetch(`${origin}/health`)).status).toBe(429);
+    expect((await fetch(`${origin}/api/catalog/machines`)).status).toBe(401);
+    expect((await fetch(`${origin}/api/catalog/machines`)).status).toBe(429);
   });
 
   it('fails open when the rate-limit store is unavailable', async () => {
@@ -134,17 +162,7 @@ describe('API gateway', () => {
     servers.push(server);
     await new Promise<void>((resolve) => server.once('listening', resolve));
     const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-    expect((await fetch(`${origin}/health`)).status).toBe(200);
-    expect((await fetch(`${origin}/health`)).status).toBe(200);
-  });
-
-  it('returns draining on health once the process stops accepting traffic', async () => {
-    const server = createApp(config(), undefined, () => false).listen(0);
-    servers.push(server);
-    await new Promise<void>((resolve) => server.once('listening', resolve));
-    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-    const response = await fetch(`${origin}/health`);
-    expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({ status: 'draining', service: 'api-gateway' });
+    expect((await fetch(`${origin}/api/catalog/machines`)).status).toBe(401);
+    expect((await fetch(`${origin}/api/catalog/machines`)).status).toBe(401);
   });
 });

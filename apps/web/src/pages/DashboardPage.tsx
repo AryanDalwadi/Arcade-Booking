@@ -9,6 +9,13 @@ import { useAppDispatch, useAppSelector } from '../store';
 export function DashboardPage({ portal }: { portal: 'customer' | 'admin' }) {
   const dispatch = useAppDispatch();
   const [health, setHealth] = useState<'Checking' | 'Online' | 'Offline'>('Checking');
+  const [utilization, setUtilization] = useState<{
+    day: string;
+    venueMinutes: number;
+    bookingCount: number;
+    freshness: string | null;
+    projection: string;
+  } | null>(null);
   const { machines, status: catalogStatus } = useAppSelector((state) => state.catalog);
   const { bookings, listStatus } = useAppSelector((state) => state.bookings);
   const { users, usersStatus } = useAppSelector((state) => state.identity);
@@ -35,6 +42,23 @@ export function DashboardPage({ portal }: { portal: 'customer' | 'admin' }) {
     void dispatch(fetchBookings(portal === 'admin' ? undefined : userId));
   }, [dispatch, portal, userId]);
 
+  useEffect(() => {
+    if (portal !== 'admin') return;
+    void api<{ success: true; data: {
+      day: string;
+      venueMinutes: number;
+      bookingCount: number;
+      freshness: string | null;
+      projection: string;
+    } }>('/api/analytics/utilization')
+      .then((body) => {
+        if (body.data && !Array.isArray(body.data) && typeof body.data.venueMinutes === 'number') {
+          setUtilization(body.data);
+        }
+      })
+      .catch(() => setUtilization(null));
+  }, [portal]);
+
   const statuses = portal === 'admin'
     ? [catalogStatus, usersStatus, listStatus]
     : [catalogStatus, listStatus];
@@ -53,6 +77,14 @@ export function DashboardPage({ portal }: { portal: 'customer' | 'admin' }) {
         <Stat label="Machines ready" value={loading ? '—' : String(machines.filter((machine) => machine.status === 'ACTIVE').length)} />
         <Stat label={portal === 'admin' ? 'All bookings' : 'My bookings'} value={loading ? '—' : String(visibleBookings.length)} />
       </div>
+      {portal === 'admin' && utilization && (
+        <p>
+          Today&apos;s reserved minutes (projection {utilization.projection}): {utilization.venueMinutes}
+          {' '}across {utilization.bookingCount} bookings on {utilization.day}.
+          Freshness: {utilization.freshness ?? 'no reserved events yet'}.
+          PostgreSQL remains the booking source of truth.
+        </p>
+      )}
       {loading && <ResourceMessage kind="loading">Syncing live platform data…</ResourceMessage>}
       {failed && <ResourceMessage kind="error">Some dashboard data could not be loaded. Open its page to retry.</ResourceMessage>}
       {!loading && !failed && users.length === 0 && machines.length === 0 && bookings.length === 0 && (

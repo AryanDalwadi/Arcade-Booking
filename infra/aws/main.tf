@@ -1,3 +1,6 @@
+# Proposed AWS map for Milestone 12. This file is not a live account.
+# terraform validate is in CI. terraform apply is blocked until
+# i_understand_this_creates_billable_aws_resources is set to true.
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -9,6 +12,24 @@ locals {
     "web", "gateway", "identity", "catalog", "booking",
     "payment", "notification", "inventory", "analytics"
   ])
+}
+
+resource "terraform_data" "apply_guard" {
+  input = var.i_understand_this_creates_billable_aws_resources
+  lifecycle {
+    precondition {
+      condition     = var.i_understand_this_creates_billable_aws_resources
+      error_message = "Milestone 12 is a laptop map. Refusing apply until you set i_understand_this_creates_billable_aws_resources=true and accept the bill."
+    }
+  }
+}
+
+resource "aws_budgets_budget" "monthly" {
+  name         = "${local.name}-monthly"
+  budget_type  = "COST"
+  limit_amount = var.monthly_budget_usd
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
 }
 
 module "vpc" {
@@ -285,7 +306,7 @@ resource "aws_iam_policy" "application" {
       {
         Effect   = "Allow"
         Action   = ["kafka-cluster:Connect", "kafka-cluster:DescribeCluster"]
-        Resource = "*"
+        Resource = aws_msk_serverless_cluster.events.arn
       }
     ]
   })

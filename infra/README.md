@@ -13,8 +13,8 @@ shape. Review sizing, security, recovery, and cost before production use.
 - `docker/node.Dockerfile` is a common npm-workspace image recipe.
 - `k8s/base/` is a Kustomize base with namespace, configuration, workloads,
   services, ingress, probes, resource policies, and HPAs.
-- `aws/` is a Terraform starter and service mapping for EKS, ECR, RDS, MSK,
-  ElastiCache, S3, IAM, Secrets Manager, VPC, ALB integration, and CloudWatch.
+- `aws/` is a Terraform **proposed map** (EKS, ECR, RDS, MSK, ElastiCache).
+  Milestone 12 does not apply it.
 - `.github/workflows/` runs lockfile CI, SHA-tagged image builds, and
   a manually gated deployment skeleton that stays off until you enable it.
 
@@ -68,49 +68,52 @@ monorepo lockfile for application verification.
 
 ## Kubernetes
 
-Render before applying:
+These manifests are a learning target. Rendering them does not deploy a cluster.
 
 ```powershell
-kubectl kustomize infra/k8s/base > arcade-rendered.yaml
-kubectl apply --dry-run=server -f arcade-rendered.yaml
+# Print the combined YAML only.
+kubectl kustomize infra/k8s/base
+
+# Client-side validation. Does not contact a cluster.
+kubectl apply --dry-run=client -k infra/k8s/base
 ```
 
 Before a real deployment:
 
-1. Replace all `ghcr.io/OWNER/...` image names and immutable tags in an overlay.
+1. Replace `OWNER` and `replace-me-with-git-sha` in an overlay with the image
+   registry and the git SHA CI already built. Do not promote `:latest`.
 2. Replace ConfigMap endpoint placeholders with managed service endpoints.
 3. Copy `secret.template.yaml` outside version control, replace every value, and
    apply it, or use External Secrets/Secrets Store CSI. The template is
    intentionally excluded from Kustomize.
-4. Install metrics-server for HPA metrics and an ingress controller.
-5. Confirm the gateway serves `/health`, domain services serve `/health/live`
-   and `/health/ready`, and every container listens on its documented port.
+4. Run SQL as a Job from `migrate.template.yaml`. Replicas set `MIGRATE_ON_START=false`.
+5. Install metrics-server for HPA metrics and an ingress controller.
+6. Confirm probes: gateway `/health/live` vs `/health`; services `/health/live`
+   vs `/health/ready`.
 
 ```powershell
 Copy-Item infra/k8s/base/secret.template.yaml "$env:TEMP/arcade-secret.yaml"
 # Edit the temporary file, then:
 kubectl apply -f "$env:TEMP/arcade-secret.yaml"
 kubectl apply -k infra/k8s/base
-kubectl -n arcade get deploy,svc,ingress,hpa
+kubectl -n arcade get deploy,svc,ingress,hpa,pdb,netpol
 ```
 
 The base uses an nginx ingress for local/general clusters. On EKS, install AWS
 Load Balancer Controller and override the ingress class and annotations in an
-environment overlay.
+environment overlay. Postgres, Kafka, and Redis are not in-cluster workloads.
 
-## AWS starter
+## AWS map
 
-See `aws/README.md`. At minimum, use remote encrypted Terraform state, review
-the plan and cost, protect production stateful resources, create service-owned
-RDS roles/databases, and connect Kubernetes workloads through Pod Identity
-rather than long-lived AWS keys.
+See [Milestone 12](../docs/MILESTONE_12_AWS.md) and `aws/README.md`. Validate
+with `terraform validate`. Do not apply from the learning path.
 
 ## GitHub Actions configuration
 
-- `ci.yml` runs npm install, typecheck, tests, build, Compose rendering,
-  Kustomize rendering, and Terraform formatting/validation.
-- `images.yml` builds each workspace, scans with Trivy, and publishes only on
-  `main` or an explicitly approved manual invocation.
+- `ci.yml` runs `npm ci`, typecheck, tests, build, Compose rendering,
+  Kustomize rendering (rejects `:latest`), and Terraform formatting/validation.
+- `images.yml` builds each workspace, tags the git SHA, scans with Trivy, and
+  publishes only when `PUBLISH_IMAGES` and a manual `publish` input are set.
 - `deploy.yml` runs only when the selected GitHub Environment has
   `DEPLOY_ENABLED=true` and the operator types `deploy`. Add required reviewers
   to that Environment.

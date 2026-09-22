@@ -642,6 +642,8 @@ break a contract and a migration to prove the release is blocked.
 
 ## 11. Kubernetes
 
+See the hands-on guide: [Milestone 11 Kubernetes](./MILESTONE_11_KUBERNETES.md).
+
 ### Definition
 
 Kubernetes reconciles declared workload state. Deployments manage stateless
@@ -707,6 +709,8 @@ simulate a failed readiness probe.
 > platform as deployed without a verified cluster and operational evidence.
 
 ## 12. AWS Target Architecture
+
+See the hands-on guide: [Milestone 12 AWS](./MILESTONE_12_AWS.md).
 
 ### Definition
 
@@ -778,6 +782,8 @@ validation only; label every resource as proposed unless actually verified.
 > the target architecture, not a claim that the infrastructure is deployed.
 
 ## 13. SQL vs NoSQL and a DynamoDB Analytics Projection
+
+See the hands-on guide: [Milestone 13 SQL vs DynamoDB](./MILESTONE_13_DYNAMODB.md).
 
 ### Definition
 

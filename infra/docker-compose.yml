@@ -170,11 +170,12 @@ services:
       CATALOG_SERVICE_URL: http://catalog:4102
       BOOKING_SERVICE_URL: http://booking:4103
       PAYMENT_SERVICE_URL: http://payment:4104
+      ANALYTICS_SERVICE_URL: http://analytics:4107
       # Shared counters across gateway replicas. Redis outage fails open.
       RATE_LIMIT_STORE: redis
     ports: ["4000:8080"]
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r => { if (!r.ok) throw Error(r.status) })"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health/live').then(r => { if (!r.ok) throw Error(r.status) })"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -322,6 +323,8 @@ services:
         <<: *service-environment,
         PORT: "4107",
         DATABASE_URL: "postgres://analytics_app:${ANALYTICS_DB_PASSWORD:-analytics_local}@postgres:5432/analytics",
+        ANALYTICS_PROJECTION: "memory",
+        ANALYTICS_VENUE_ID: "arcade",
       }
 
 networks:

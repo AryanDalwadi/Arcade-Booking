@@ -69,7 +69,7 @@ were uploaded.
 3. AWS/EKS variables exist on a GitHub Environment
 
 Until then the workflow only prints that it is not a live deploy. That is
-intentional. Milestone 11 is Kubernetes; AWS is later.
+intentional. AWS mapping is a later milestone.
 
 ## How to verify
 

@@ -4,7 +4,7 @@ Express 5 and strict TypeScript edge service for the arcade platform.
 
 ## Routes
 
-- `GET /health` is public.
+- `GET /health/live` stays up during drain; `GET /health` is public readiness (503 while draining).
 - `/api/identity/*` proxies to `IDENTITY_SERVICE_URL`.
 - `/api/catalog/*` proxies to `CATALOG_SERVICE_URL`.
 - `/api/booking/*` proxies to `BOOKING_SERVICE_URL`.

@@ -1,0 +1,20 @@
+{
+  "status": "proposed",
+  "live": false,
+  "region": "ap-south-1",
+  "compose_to_aws": {
+    "apps/web": "EKS Deployment web + ALB path /",
+    "apps/api-gateway": "EKS Deployment gateway + ALB path /api",
+    "services/*": "EKS Deployments in private subnets",
+    "Docker image": "ECR immutable tag (git SHA)",
+    "PostgreSQL": "RDS PostgreSQL, private, not publicly_accessible",
+    "Kafka": "MSK Serverless, IAM auth, private subnets",
+    "Redis": "ElastiCache Redis, encrypted, private",
+    "Ingress": "AWS Load Balancer Controller + ALB",
+    "stdout logs": "CloudWatch Logs",
+    "JWT and DB passwords": "Secrets Manager, not git"
+  },
+  "public_edge": ["ALB"],
+  "private_data": ["RDS", "MSK", "ElastiCache"],
+  "dynamodb_analytics_default": false
+}

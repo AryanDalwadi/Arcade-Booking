@@ -1,0 +1,44 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: web }
+spec: { minAvailable: 1, selector: { matchLabels: { app: web } } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: gateway }
+spec: { minAvailable: 1, selector: { matchLabels: { app: gateway } } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: identity }
+spec: { minAvailable: 1, selector: { matchLabels: { app: identity } } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: catalog }
+spec: { minAvailable: 1, selector: { matchLabels: { app: catalog } } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: booking }
+spec: { minAvailable: 1, selector: { matchLabels: { app: booking } } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: payment }
+spec: { minAvailable: 1, selector: { matchLabels: { app: payment } } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: notification }
+spec: { minAvailable: 1, selector: { matchLabels: { app: notification } } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: inventory }
+spec: { minAvailable: 1, selector: { matchLabels: { app: inventory } } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: analytics }
+spec: { minAvailable: 1, selector: { matchLabels: { app: analytics } } }
