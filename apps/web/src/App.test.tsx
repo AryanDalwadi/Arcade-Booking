@@ -109,6 +109,74 @@ describe('protected routing and sessions', () => {
     expect(await screen.findByRole('heading', { name: 'Arcade command center' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Users/i })).toBeInTheDocument();
   });
+
+  it('shows player names on admin bookings and only own rows on My Bookings', async () => {
+    const player = sessionUser;
+    const other = {
+      id: '20000000-0000-4000-8000-000000000002',
+      displayName: 'Other Player',
+      email: 'other@example.com',
+      roles: ['CUSTOMER'],
+    };
+    const bookings = [
+      {
+        id: '30000000-0000-4000-8000-000000000001',
+        userId: player.id,
+        machineId: '40000000-0000-4000-8000-000000000001',
+        startAt: '2026-09-22T10:00:00.000Z',
+        durationMinutes: 60,
+        amountCents: 6000,
+        currency: 'INR',
+        status: 'CONFIRMED',
+        createdAt: '2026-09-22T09:00:00.000Z',
+      },
+      {
+        id: '30000000-0000-4000-8000-000000000002',
+        userId: other.id,
+        machineId: '40000000-0000-4000-8000-000000000001',
+        startAt: '2026-09-22T11:00:00.000Z',
+        durationMinutes: 90,
+        amountCents: 9000,
+        currency: 'INR',
+        status: 'CONFIRMED',
+        createdAt: '2026-09-22T09:05:00.000Z',
+      },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/identity/users')) {
+        return jsonResponse({ success: true, data: [player, other] });
+      }
+      if (url.includes('/api/booking/bookings')) {
+        const scoped = url.includes(`userId=${player.id}`)
+          ? bookings.filter((booking) => booking.userId === player.id)
+          : bookings;
+        return jsonResponse({ success: true, data: scoped });
+      }
+      if (url.includes('/api/catalog/machines')) {
+        return jsonResponse({
+          success: true,
+          data: [{ id: '40000000-0000-4000-8000-000000000001', name: 'Milestone 5 Racer', status: 'ACTIVE' }],
+        });
+      }
+      return jsonResponse({ success: true, data: [] });
+    }));
+
+    const admin = { ...player, roles: ['CUSTOMER', 'ADMIN'] };
+    localStorage.setItem(AUTH_TOKEN_KEY, 'admin-token');
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(admin));
+    const adminView = renderApp('/admin/bookings');
+    expect(await screen.findByText('Test Player (player@example.com)')).toBeInTheDocument();
+    expect(screen.getByText('Other Player (other@example.com)')).toBeInTheDocument();
+    adminView.unmount();
+
+    localStorage.setItem(AUTH_TOKEN_KEY, 'customer-token');
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(player));
+    renderApp('/app/bookings');
+    expect(await screen.findByRole('heading', { name: 'My bookings' })).toBeInTheDocument();
+    expect(screen.queryByText('Other Player (other@example.com)')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Milestone 5 Racer').length).toBeGreaterThan(0);
+  });
 });
 
 function jsonResponse(body: unknown, status = 200): Response {

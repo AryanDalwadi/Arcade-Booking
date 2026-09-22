@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
+import type { RateLimitStore } from './rate-limit.js';
 
 const servers: Server[] = [];
 afterEach(async () => {
@@ -121,5 +122,29 @@ describe('API gateway', () => {
     const origin = await serve({ RATE_LIMIT_MAX: '1' });
     expect((await fetch(`${origin}/health`)).status).toBe(200);
     expect((await fetch(`${origin}/health`)).status).toBe(429);
+  });
+
+  it('fails open when the rate-limit store is unavailable', async () => {
+    const store: RateLimitStore = {
+      increment: async () => {
+        throw new Error('Redis down');
+      },
+    };
+    const server = createApp(config({ RATE_LIMIT_MAX: '1' }), store).listen(0);
+    servers.push(server);
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    expect((await fetch(`${origin}/health`)).status).toBe(200);
+    expect((await fetch(`${origin}/health`)).status).toBe(200);
+  });
+
+  it('returns draining on health once the process stops accepting traffic', async () => {
+    const server = createApp(config(), undefined, () => false).listen(0);
+    servers.push(server);
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const response = await fetch(`${origin}/health`);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ status: 'draining', service: 'api-gateway' });
   });
 });

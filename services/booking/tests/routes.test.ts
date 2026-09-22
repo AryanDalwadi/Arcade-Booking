@@ -144,4 +144,26 @@ describe('booking ownership and pricing', () => {
     expect(staffResponse.status).toBe(200);
     expect(query.mock.calls[1]?.[1]).toEqual([]);
   });
+
+  it('rejects a second overlapping hold with 409', async () => {
+    const redis = {
+      acquire: vi.fn(async () => false),
+      delete: vi.fn(async () => undefined),
+    } as unknown as RedisAdapter;
+    const origin = await serve({} as Postgres, redis, { quote: vi.fn(async () => quote()) });
+    const response = await fetch(`${origin}/v1/bookings`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-auth-subject': '10000000-0000-4000-8000-000000000001',
+      },
+      body: JSON.stringify({
+        machineId: quote().machineId,
+        startAt: '2026-10-01T10:00:00.000Z',
+        durationMinutes: 90,
+      }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'BOOKING_HOLD_EXISTS' });
+  });
 });

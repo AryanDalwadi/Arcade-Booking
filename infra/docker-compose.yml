@@ -4,7 +4,11 @@ x-node-service: &node-service
   build:
     context: ..
     dockerfile: infra/docker/node.Dockerfile
+    args:
+      GIT_SHA: "${GIT_SHA:-local}"
   restart: unless-stopped
+  init: true
+  stop_grace_period: 12s
   networks: [application, data]
   depends_on:
     postgres:
@@ -17,6 +21,8 @@ x-node-service: &node-service
     NODE_ENV: production
     KAFKA_BROKERS: kafka:9092
     REDIS_URL: redis://redis:6379
+    # Local release convenience. Production should migrate as a one-off Job.
+    MIGRATE_ON_START: "true"
   healthcheck: &node-healthcheck
     test:
       [
@@ -109,7 +115,8 @@ services:
           arcade.inventory.reserved.v1 \
           arcade.inventory.rejected.v1 \
           arcade.payment.completed.v1 \
-          arcade.payment.failed.v1
+          arcade.payment.failed.v1 \
+          arcade.dead-letter.v1
         do
           /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
             --topic "$$topic" --partitions 3 --replication-factor 1
@@ -134,7 +141,9 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         VITE_API_GATEWAY_URL: http://localhost:4000
+        GIT_SHA: "${GIT_SHA:-local}"
     restart: unless-stopped
+    stop_grace_period: 10s
     networks: [application]
     ports: ["3000:8080"]
     healthcheck:
@@ -148,6 +157,8 @@ services:
     build:
       context: ..
       dockerfile: apps/api-gateway/Dockerfile
+      args:
+        GIT_SHA: "${GIT_SHA:-local}"
     environment:
       <<: *service-environment
       PORT: "8080"
@@ -159,6 +170,7 @@ services:
       CATALOG_SERVICE_URL: http://catalog:4102
       BOOKING_SERVICE_URL: http://booking:4103
       PAYMENT_SERVICE_URL: http://payment:4104
+      # Shared counters across gateway replicas. Redis outage fails open.
       RATE_LIMIT_STORE: redis
     ports: ["4000:8080"]
     healthcheck:
@@ -177,6 +189,7 @@ services:
           {
             WORKSPACE: "@arcade/identity-service",
             SERVICE_PATH: services/identity,
+            GIT_SHA: "${GIT_SHA:-local}",
           },
       }
     environment:
@@ -200,6 +213,7 @@ services:
           {
             WORKSPACE: "@arcade/catalog-service",
             SERVICE_PATH: services/catalog,
+            GIT_SHA: "${GIT_SHA:-local}",
           },
       }
     environment:
@@ -219,6 +233,7 @@ services:
           {
             WORKSPACE: "@arcade/booking-service",
             SERVICE_PATH: services/booking,
+            GIT_SHA: "${GIT_SHA:-local}",
           },
       }
     environment:
@@ -239,6 +254,7 @@ services:
           {
             WORKSPACE: "@arcade/payment-service",
             SERVICE_PATH: services/payment,
+            GIT_SHA: "${GIT_SHA:-local}",
           },
       }
     environment:
@@ -258,6 +274,7 @@ services:
           {
             WORKSPACE: "@arcade/notification-service",
             SERVICE_PATH: services/notification,
+            GIT_SHA: "${GIT_SHA:-local}",
           },
       }
     environment:
@@ -277,6 +294,7 @@ services:
           {
             WORKSPACE: "@arcade/inventory-service",
             SERVICE_PATH: services/inventory,
+            GIT_SHA: "${GIT_SHA:-local}",
           },
       }
     environment:
@@ -296,6 +314,7 @@ services:
           {
             WORKSPACE: "@arcade/analytics-service",
             SERVICE_PATH: services/analytics,
+            GIT_SHA: "${GIT_SHA:-local}",
           },
       }
     environment:

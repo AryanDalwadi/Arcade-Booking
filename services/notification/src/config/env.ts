@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { requireProductionEnv } from '@arcade/observability';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -13,6 +14,10 @@ const schema = z.object({
 });
 
 export type Env = z.infer<typeof schema>;
-export const parseEnv = (source: NodeJS.ProcessEnv): Env => schema.parse(source);
+export const parseEnv = (source: NodeJS.ProcessEnv): Env => {
+  const parsed = schema.parse(source);
+  requireProductionEnv(source, ['DATABASE_URL', 'REDIS_URL', 'KAFKA_BROKERS']);
+  return parsed;
+};
 export const env = parseEnv(process.env);
 

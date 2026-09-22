@@ -83,9 +83,11 @@ Inventory protects the invariant in two layers:
 2. A GiST exclusion constraint rejects overlapping `RESERVED` time ranges even
    if application locking is accidentally removed.
 
-The Redis booking hold remains a short-lived contention optimization. It is not
-the source of truth because different overlapping ranges produce different
-Redis keys and Redis can be unavailable.
+The Redis booking hold is a short-lived contention optimization. Holds now
+cover 15-minute slots for the requested range, so a 60-minute booking and a
+90-minute booking on the same machine can collide in Redis. Redis is still not
+the source of truth: keys expire, Redis can be unavailable, and Inventory's
+advisory lock plus exclusion constraint decide the slot.
 
 ## Payment ordering and idempotency
 

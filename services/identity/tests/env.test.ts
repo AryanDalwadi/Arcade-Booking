@@ -19,5 +19,12 @@ describe('identity environment', () => {
   it('rejects the development JWT secret in production', () => {
     expect(() => parseEnv({ NODE_ENV: 'production' })).toThrow();
   });
+
+  it('requires backing-service URLs in production', () => {
+    expect(() => parseEnv({
+      NODE_ENV: 'production',
+      JWT_SECRET: 'a-production-secret-with-32-characters',
+    })).toThrow(/DATABASE_URL/);
+  });
 });
 

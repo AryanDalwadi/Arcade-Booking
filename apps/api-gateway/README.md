@@ -41,4 +41,5 @@ connections and drain active requests before the configured timeout.
 The rate limiter depends on the `RateLimitStore` interface. The in-memory
 implementation is suitable for local or single-instance use. Set
 `RATE_LIMIT_STORE=redis` and `REDIS_URL` to use the atomic Redis implementation
-when limits must be shared across gateway replicas.
+when limits must be shared across gateway replicas. If Redis is unreachable the
+gateway fails open and still serves traffic until Redis recovers.

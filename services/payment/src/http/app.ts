@@ -5,6 +5,7 @@ export interface Dependencies {
   dbReady: () => Promise<boolean>;
   dependencyReady: () => boolean;
   routes: Router;
+  acceptingTraffic?: () => boolean;
 }
 
 export function createHttpApp(deps: Dependencies) {
@@ -13,6 +14,9 @@ export function createHttpApp(deps: Dependencies) {
   app.use(express.json({ limit: '100kb' }));
   app.get('/health/live', (_req, res) => res.json({ status: 'ok', service: 'payment' }));
   app.get('/health/ready', async (_req, res) => {
+    if (deps.acceptingTraffic && !deps.acceptingTraffic()) {
+      return res.status(503).json({ status: 'not_ready', checks: { shuttingDown: true } });
+    }
     const database = await deps.dbReady();
     const dependencies = deps.dependencyReady();
     res.status(database && dependencies ? 200 : 503).json({ status: database && dependencies ? 'ready' : 'not_ready', checks: { database, dependencies } });
@@ -26,4 +30,3 @@ export function createHttpApp(deps: Dependencies) {
   });
   return app;
 }
-

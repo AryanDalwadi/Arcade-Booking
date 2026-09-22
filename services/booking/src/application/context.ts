@@ -13,6 +13,7 @@ import { readAuthContext, requireAuth } from '@arcade/service-auth';
 import { Postgres } from '../adapters/postgres';
 import { RedisAdapter } from '../adapters/redis';
 import type { QuoteProvider } from '../adapters/catalog';
+import { HOLD_TTL_SECONDS, bookingHoldKeys } from './holds';
 
 export async function handleBookingEvent(db: Postgres, event: unknown): Promise<void> {
   const eventType = (event as { eventType?: string })?.eventType;
@@ -68,9 +69,9 @@ export function bookingRoutes(db: Postgres, redis: RedisAdapter, quotes: QuotePr
         code: 'BOOKING_QUOTE_UNAVAILABLE',
       });
     }
-    const holdKey = `booking:hold:${input.machineId}:${input.startAt}:${input.durationMinutes}`;
+    const holdKeys = bookingHoldKeys(input.machineId, input.startAt, input.durationMinutes);
     const holdOwner = randomUUID();
-    if (!(await redis.acquire(holdKey, holdOwner, 120))) {
+    if (!(await redis.acquire(holdKeys, holdOwner, HOLD_TTL_SECONDS))) {
       return res.status(409).json({
         success: false,
         message: 'This machine and time slot is currently being booked',
@@ -95,7 +96,7 @@ export function bookingRoutes(db: Postgres, redis: RedisAdapter, quotes: QuotePr
       });
       return res.status(201).json({ success: true, data: booking });
     } catch (error) {
-      await redis.delete(holdKey);
+      await redis.delete(holdKeys);
       throw error;
     }
   });
