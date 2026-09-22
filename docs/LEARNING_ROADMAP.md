@@ -576,6 +576,8 @@ stop it gracefully, and run it with no writable application filesystem.
 
 ## 10. CI/CD
 
+See the hands-on guide: [Milestone 10 CI/CD](./MILESTONE_10_CICD.md).
+
 ### Definition
 
 Continuous integration automatically validates each change. Continuous delivery

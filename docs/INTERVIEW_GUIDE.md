@@ -369,6 +369,8 @@ and run the final image read-only as non-root.
 
 ## 10. CI/CD
 
+See the hands-on guide: [Milestone 10 CI/CD](./MILESTONE_10_CICD.md).
+
 **Definition:** CI continuously validates changes; delivery creates a releasable
 artifact; deployment promotes it to an environment.
 

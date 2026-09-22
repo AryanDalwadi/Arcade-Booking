@@ -24,17 +24,22 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            */package-lock.json
-      - name: Install dependencies
-        run: npm install --ignore-scripts
+          cache-dependency-path: package-lock.json
+      - name: Install from lockfile
+        run: npm ci
       - name: Typecheck
         run: npm run typecheck
       - name: Test
         run: npm test
       - name: Build
         run: npm run build
+      - name: Reject tracked secret-like files
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$|\.pem$|(^|/)id_rsa$'; then
+            echo "::error::Secret-like files must not be committed"
+            exit 1
+          fi
+          echo "No tracked .env or key files"
 
   infrastructure:
     name: Validate delivery assets

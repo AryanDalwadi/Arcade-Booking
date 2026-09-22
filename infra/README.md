@@ -15,8 +15,8 @@ shape. Review sizing, security, recovery, and cost before production use.
   services, ingress, probes, resource policies, and HPAs.
 - `aws/` is a Terraform starter and service mapping for EKS, ECR, RDS, MSK,
   ElastiCache, S3, IAM, Secrets Manager, VPC, ALB integration, and CloudWatch.
-- `.github/workflows/` validates code and infrastructure, scans images, and
-  provides a manually gated deployment skeleton.
+- `.github/workflows/` runs lockfile CI, SHA-tagged image builds, and
+  a manually gated deployment skeleton that stays off until you enable it.
 
 ## Local dependencies
 
