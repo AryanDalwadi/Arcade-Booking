@@ -17,7 +17,11 @@ async function serve(query: ReturnType<typeof vi.fn>): Promise<string> {
   const app = createHttpApp({
     dbReady: async () => true,
     dependencyReady: () => true,
-    routes: paymentRoutes(db),
+    routes: paymentRoutes(db, {
+      gateway: { createOrder: async () => ({ orderId: 'order_sim_test', keyId: 'rzp_test_simulated', provider: 'SIMULATED' }) },
+      publicKeyId: 'rzp_test_simulated',
+      webhookSecret: 'whsec_test',
+    }),
   });
   const server = createServer(app).listen(0);
   servers.push(server);

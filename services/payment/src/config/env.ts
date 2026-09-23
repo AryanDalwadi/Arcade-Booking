@@ -10,7 +10,10 @@ const schema = z.object({
   KAFKA_CLIENT_ID: z.string().default('arcade-payment'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-  
+  RAZORPAY_KEY_ID: z.string().optional().transform((value) => value?.trim() || undefined),
+  RAZORPAY_KEY_SECRET: z.string().optional().transform((value) => value?.trim() || undefined),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional().transform((value) => value?.trim() || undefined),
+  RESERVATION_HOLD_SECONDS: z.coerce.number().int().positive().default(600),
 });
 
 export type Env = z.infer<typeof schema>;

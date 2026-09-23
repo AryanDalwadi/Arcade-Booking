@@ -5,6 +5,7 @@ import type { GatewayConfig } from './config.js';
 const publicPaths = new Set([
   '/api/identity/auth/login',
   '/api/identity/auth/register',
+  '/api/payment/webhooks/razorpay',
 ]);
 
 export function verifyJwt(config: GatewayConfig) {
@@ -16,6 +17,7 @@ export function verifyJwt(config: GatewayConfig) {
     delete request.headers['x-auth-subject'];
     delete request.headers['x-auth-role'];
     delete request.headers['x-auth-roles'];
+    delete request.headers['x-auth-email'];
 
     if (!request.path.startsWith('/api/') || publicPaths.has(request.path)) {
       next();
@@ -32,6 +34,7 @@ export function verifyJwt(config: GatewayConfig) {
       request.headers['x-auth-subject'] = String(claims.sub ?? '');
       if (claims.role) request.headers['x-auth-role'] = String(claims.role);
       if (Array.isArray(claims.roles)) request.headers['x-auth-roles'] = claims.roles.join(',');
+      if (typeof claims.email === 'string' && claims.email) request.headers['x-auth-email'] = claims.email;
       next();
     } catch {
       response.status(401).json({ success: false, message: 'Invalid or expired token', code: 'INVALID_TOKEN' });

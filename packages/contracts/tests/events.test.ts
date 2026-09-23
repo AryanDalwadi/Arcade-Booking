@@ -29,6 +29,28 @@ describe('versioned event contracts', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts additive customerEmail on a booking created payload', () => {
+    const result = bookingCreatedEventSchema.safeParse({
+      eventId: randomUUID(),
+      eventType: eventTypes.bookingCreated,
+      version: 1,
+      occurredAt: new Date().toISOString(),
+      correlationId: randomUUID(),
+      producer: 'booking',
+      payload: {
+        id: randomUUID(),
+        userId: randomUUID(),
+        machineId: randomUUID(),
+        startAt: new Date().toISOString(),
+        durationMinutes: 60,
+        amountCents: 1200,
+        currency: 'INR',
+        customerEmail: 'player@example.com',
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('keys booking and payment events by the booking identifier', () => {
     const bookingId = randomUUID();
     expect(eventPartitionKey({

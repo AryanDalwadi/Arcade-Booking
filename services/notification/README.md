@@ -14,5 +14,7 @@ Kafka/Redis startup failures are logged with the dependency name. The process re
 
 ## Ownership
 
-Database: `arcade_notification`. Migrations in `migrations/` create only this service's tables. 
+Database: `arcade_notification`. Migrations in `migrations/` create only this service's tables.
+
+Consumes booking/payment/inventory events and sends **SMTP email**. Local Mailhog (`http://localhost:8025`) is the mailbox. Delivery is idempotent on `event_id`. This is not Gmail or production SES. 
 

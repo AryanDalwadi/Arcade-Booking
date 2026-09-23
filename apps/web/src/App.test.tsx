@@ -127,7 +127,7 @@ describe('protected routing and sessions', () => {
         durationMinutes: 60,
         amountCents: 6000,
         currency: 'INR',
-        status: 'CONFIRMED',
+        status: 'PENDING_PAYMENT',
         createdAt: '2026-09-22T09:00:00.000Z',
       },
       {
@@ -176,6 +176,7 @@ describe('protected routing and sessions', () => {
     expect(await screen.findByRole('heading', { name: 'My bookings' })).toBeInTheDocument();
     expect(screen.queryByText('Other Player (other@example.com)')).not.toBeInTheDocument();
     expect(screen.getAllByText('Milestone 5 Racer').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Pay now' })).toBeInTheDocument();
   });
 });
 

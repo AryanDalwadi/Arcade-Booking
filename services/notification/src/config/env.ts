@@ -10,7 +10,8 @@ const schema = z.object({
   KAFKA_CLIENT_ID: z.string().default('arcade-notification'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-  
+  SMTP_URL: z.string().default('smtp://localhost:1025'),
+  MAIL_FROM: z.string().default('arcade@localhost'),
 });
 
 export type Env = z.infer<typeof schema>;

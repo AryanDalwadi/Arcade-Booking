@@ -6,6 +6,7 @@ export const eventTypes = {
   bookingPaymentFailed: 'arcade.booking.payment-failed.v1',
   inventoryReserved: 'arcade.inventory.reserved.v1',
   inventoryRejected: 'arcade.inventory.rejected.v1',
+  inventoryReleased: 'arcade.inventory.released.v1',
   paymentCompleted: 'arcade.payment.completed.v1',
   paymentFailed: 'arcade.payment.failed.v1',
   deadLetter: 'arcade.dead-letter.v1',
@@ -139,6 +140,7 @@ export const createBookingSchema = z.object({
   machineId: z.uuid(),
   startAt: z.iso.datetime(),
   durationMinutes: z.number().int().min(15).max(480),
+  customerEmail: z.email().optional(),
 });
 export const bookingSchema = createBookingSchema.extend({
   id: z.uuid(),
@@ -149,6 +151,8 @@ export const bookingSchema = createBookingSchema.extend({
   createdAt: z.iso.datetime(),
 });
 
+export const paymentProviderSchema = z.enum(['SIMULATED', 'RAZORPAY']);
+export const paymentStatusSchema = z.enum(['PENDING', 'COMPLETED', 'FAILED']);
 export const createPaymentSchema = z.object({
   bookingId: z.uuid(),
   amountCents: z.number().int().positive(),
@@ -156,27 +160,69 @@ export const createPaymentSchema = z.object({
   idempotencyKey: z.string().min(8).max(255),
   simulateOutcome: z.enum(['SUCCEED', 'FAIL']).default('SUCCEED'),
 });
-export const paymentSchema = createPaymentSchema.omit({ simulateOutcome: true }).extend({
+export const createPaymentOrderSchema = z.object({
+  bookingId: z.uuid(),
+});
+export const simulatePaymentSchema = z.object({
+  outcome: z.enum(['SUCCEED', 'FAIL']).default('SUCCEED'),
+});
+export const confirmRazorpayPaymentSchema = z.object({
+  orderId: z.string().min(1),
+  paymentId: z.string().min(1),
+  signature: z.string().min(1),
+});
+export const checkoutOrderSchema = z.object({
+  bookingId: z.uuid(),
+  orderId: z.string().min(1),
+  keyId: z.string().min(1),
+  amountCents: z.number().int().positive(),
+  currency: z.string().length(3),
+  provider: paymentProviderSchema,
+  alreadyPaid: z.boolean().optional(),
+});
+export const paymentSchema = z.object({
   id: z.uuid(),
-  status: z.enum(['COMPLETED', 'FAILED']),
-  provider: z.literal('SIMULATED'),
+  bookingId: z.uuid(),
+  userId: z.uuid().optional(),
+  customerEmail: z.email().optional(),
+  amountCents: z.number().int().positive(),
+  currency: z.string().length(3),
+  idempotencyKey: z.string().min(8).max(255),
+  status: paymentStatusSchema,
+  provider: paymentProviderSchema,
 });
 
 export const bookingCreatedPayloadSchema = bookingSchema.pick({
   id: true, userId: true, machineId: true, startAt: true,
   durationMinutes: true, amountCents: true, currency: true,
+}).extend({
+  customerEmail: z.email().optional(),
 });
 export const paymentEventPayloadSchema = paymentSchema.pick({
   id: true, bookingId: true, amountCents: true, currency: true, status: true,
+}).extend({
+  customerEmail: z.email().optional(),
 });
 export const inventoryEventPayloadSchema = z.object({
   bookingId: z.uuid(),
+  userId: z.uuid().optional(),
+  customerEmail: z.email().optional(),
   machineId: z.uuid(),
   startAt: z.iso.datetime(),
   durationMinutes: z.number().int().positive(),
   amountCents: z.number().int().positive(),
   currency: z.string().length(3),
   reason: z.string().optional(),
+});
+export const notificationDeliverySchema = z.object({
+  id: z.uuid(),
+  eventId: z.uuid(),
+  eventType: z.string(),
+  channel: z.string(),
+  recipient: z.string(),
+  status: z.enum(['SENT', 'FAILED', 'RECORDED']),
+  payload: z.unknown(),
+  createdAt: z.iso.datetime().optional(),
 });
 export const bookingCreatedEventSchema = createEventEnvelopeSchema(
   eventTypes.bookingCreated, bookingCreatedPayloadSchema,
@@ -193,6 +239,16 @@ export const inventoryReservedEventSchema = createEventEnvelopeSchema(
 export const inventoryRejectedEventSchema = createEventEnvelopeSchema(
   eventTypes.inventoryRejected, inventoryEventPayloadSchema,
 );
+export const inventoryReleasedPayloadSchema = z.object({
+  bookingId: z.uuid(),
+  machineId: z.uuid(),
+  startAt: z.iso.datetime(),
+  durationMinutes: z.number().int().positive(),
+  reason: z.string().optional(),
+});
+export const inventoryReleasedEventSchema = createEventEnvelopeSchema(
+  eventTypes.inventoryReleased, inventoryReleasedPayloadSchema,
+);
 
 export type RegisterUser = z.infer<typeof registerUserSchema>;
 export type Login = z.infer<typeof loginSchema>;
@@ -206,5 +262,12 @@ export type MachineQuote = z.infer<typeof machineQuoteSchema>;
 export type BookingStatus = z.infer<typeof bookingStatusSchema>;
 export type CreateBookingRequest = z.infer<typeof createBookingSchema>;
 export type Booking = z.infer<typeof bookingSchema>;
+export type PaymentProvider = z.infer<typeof paymentProviderSchema>;
+export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
 export type CreatePaymentRequest = z.infer<typeof createPaymentSchema>;
+export type CreatePaymentOrderRequest = z.infer<typeof createPaymentOrderSchema>;
+export type SimulatePaymentRequest = z.infer<typeof simulatePaymentSchema>;
+export type ConfirmRazorpayPaymentRequest = z.infer<typeof confirmRazorpayPaymentSchema>;
+export type CheckoutOrder = z.infer<typeof checkoutOrderSchema>;
 export type Payment = z.infer<typeof paymentSchema>;
+export type NotificationDelivery = z.infer<typeof notificationDeliverySchema>;

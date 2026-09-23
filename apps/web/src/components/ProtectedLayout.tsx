@@ -15,6 +15,7 @@ const adminRoutes = [
   { path: '/admin/user-groups', label: 'User Groups', icon: '◉' },
   { path: '/admin/catalog', label: 'Catalog Management', icon: '▦' },
   { path: '/admin/bookings', label: 'All Bookings', icon: '◆' },
+  { path: '/admin/notifications', label: 'Notifications', icon: '✉' },
 ];
 
 export function PortalLayout({ portal }: { portal: 'customer' | 'admin' }) {

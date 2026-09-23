@@ -34,6 +34,7 @@ async function connectDependencies() {
         'arcade.payment.failed.v1',
         'arcade.inventory.reserved.v1',
         'arcade.inventory.rejected.v1',
+        'arcade.inventory.released.v1',
       ],
       (event) => handleBookingEvent(db, event),
     );

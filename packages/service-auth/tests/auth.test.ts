@@ -15,7 +15,17 @@ describe('service authorization', () => {
       'x-auth-roles': 'CUSTOMER,unknown,ADMIN',
     }));
     expect(context?.subject).toBe('user-1');
+    expect(context?.email).toBeUndefined();
     expect([...context!.roles]).toEqual(['CUSTOMER', 'ADMIN']);
+  });
+
+  it('forwards a verified email claim', () => {
+    const context = readAuthContext(request({
+      'x-auth-subject': 'user-1',
+      'x-auth-roles': 'CUSTOMER',
+      'x-auth-email': 'player@example.com',
+    }));
+    expect(context?.email).toBe('player@example.com');
   });
 
   it('denies a role mismatch with 403', () => {

@@ -14,5 +14,7 @@ Kafka/Redis startup failures are logged with the dependency name. The process re
 
 ## Ownership
 
-Database: `arcade_payment`. Migrations in `migrations/` create only this service's tables. The payment provider is intentionally **SIMULATED** for learning; no real charge occurs.
+Database: `arcade_payment`. Migrations in `migrations/` create only this service's tables.
+
+Inventory reservation creates a **PENDING** payment. Customers then create a Razorpay **TEST** order (`POST /v1/orders`). The webhook `POST /v1/webhooks/razorpay` is the source of truth for capture/failure. If `RAZORPAY_KEY_ID` is unset, the labeled **SIMULATED** provider is used so CI never calls the network. This is not a live charge.
 

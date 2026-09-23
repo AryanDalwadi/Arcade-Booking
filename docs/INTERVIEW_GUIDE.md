@@ -210,6 +210,35 @@ database invariant permits only one.
 > by query plans. Main risks are locks, exhausted connections, and incompatible
 > migrations, addressed with short work and expand-and-contract releases.
 
+## 6b. Razorpay test checkout and Mailhog email
+
+**Definition:** Razorpay Checkout keeps card data off our servers. A webhook
+signed with HMAC-SHA256 is the source of truth for capture and failure. Mailhog
+is a local SMTP sink so you can open the message without sending real email.
+
+**Why here:** The interview demo is book → reserve → pay → email, with payment
+and notification remaining separate services.
+
+**Honesty:** This uses Razorpay **test** keys and Mailhog. It is not a live
+charge and not Gmail/SES.
+
+**60–90 second answer:**
+
+> After inventory reserves the machine I insert a PENDING payment, I do not
+> charge yet. The customer creates a Razorpay test order; Checkout.js collects
+> the card on Razorpay's page so we never store PAN. Razorpay then posts
+> `payment.captured` to our public webhook. I verify `X-Razorpay-Signature`
+> against the raw body, update the payment row once under a unique provider
+> reference, and write `payment.completed` through the outbox. Booking marks
+> the reservation CONFIRMED. Notification consumes that event and sends SMTP
+> mail; `event_id` uniqueness means a replayed webhook or Kafka duplicate still
+> yields one payment and one email. An unpaid reserve is a 10-minute hold:
+> payment.failed or hold expiry releases inventory so the next customer can
+> book that machine. A paid reservation stays reserved for the session. If
+> Razorpay keys are absent, a labeled SIMULATED adapter keeps CI offline. In
+> production I would swap Mailhog for SES or SendGrid without changing the
+> event contract.
+
 ## 6. Kafka, event-driven design, outbox, idempotency, and DLQ
 
 **Definition:** Kafka is a partitioned durable log. The outbox prevents lost
@@ -537,9 +566,18 @@ duplicate/out-of-order events, and rebuild the table.
 **Why not call notification directly?** A notification outage should not reject
 a valid booking. Kafka buffers a committed fact and supports independent retry.
 
-**How do you avoid duplicate charges?** Require an idempotency key, store it with
-the payment result under a unique constraint, and return the original result for
-repeated requests.
+**How do you avoid duplicate charges?** Create a PENDING payment keyed by
+`booking:{id}` when inventory reserves. Razorpay webhooks finalize that row
+once; a unique provider reference and status check make a replay a no-op. Keep
+a labeled simulated adapter for CI when test keys are unset.
+
+**Why is the webhook the source of truth, not the Checkout callback?** The
+browser can be closed, replayed, or forged. Razorpay signs the webhook body;
+we verify HMAC and then emit `payment.completed`.
+
+**Why not email from booking directly?** A mail outage must not reject a paid
+booking. Kafka plus an idempotent notification consumer retries independently.
+Locally Mailhog shows the message; production would be SES/SendGrid.
 
 **How do you trace a request?** The gateway creates or forwards a correlation ID;
 HTTP requests, event metadata, and structured logs carry it. Causation IDs link

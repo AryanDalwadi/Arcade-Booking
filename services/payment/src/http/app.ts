@@ -1,6 +1,8 @@
 import express, { NextFunction, Request, Response, Router } from 'express';
 import { ZodError } from 'zod';
 
+export type RequestWithRawBody = Request & { rawBody?: string };
+
 export interface Dependencies {
   dbReady: () => Promise<boolean>;
   dependencyReady: () => boolean;
@@ -11,7 +13,12 @@ export interface Dependencies {
 export function createHttpApp(deps: Dependencies) {
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '100kb' }));
+  app.use(express.json({
+    limit: '100kb',
+    verify: (request, _response, buffer) => {
+      (request as RequestWithRawBody).rawBody = buffer.toString('utf8');
+    },
+  }));
   app.get('/health/live', (_req, res) => res.json({ status: 'ok', service: 'payment' }));
   app.get('/health/ready', async (_req, res) => {
     if (deps.acceptingTraffic && !deps.acceptingTraffic()) {
