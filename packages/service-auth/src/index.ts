@@ -3,6 +3,7 @@ import { userRoleSchema, type UserRole } from '@arcade/contracts';
 
 export type AuthContext = {
   subject: string;
+  email?: string;
   roles: ReadonlySet<UserRole>;
 };
 
@@ -14,7 +15,8 @@ export function readAuthContext(request: Request): AuthContext | null {
     const result = userRoleSchema.safeParse(candidate.trim());
     if (result.success) roles.add(result.data);
   }
-  return { subject, roles };
+  const email = request.header('x-auth-email')?.trim();
+  return { subject, roles, email: email || undefined };
 }
 
 export function hasAnyRole(request: Request, allowed: readonly UserRole[]): boolean {

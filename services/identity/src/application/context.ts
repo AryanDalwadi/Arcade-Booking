@@ -80,7 +80,7 @@ export function identityRoutes(db: Postgres, env: Env): Router {
       issuer: env.JWT_ISSUER,
       audience: env.JWT_AUDIENCE,
     };
-    const token = jwt.sign({ sub: user.id, roles: user.roles }, env.JWT_SECRET, options);
+    const token = jwt.sign({ sub: user.id, roles: user.roles, email: user.email }, env.JWT_SECRET, options);
     return res.json({ success: true, data: { token, user: publicUser(user) } });
   });
   router.get('/users', requireAnyRole('ADMIN', 'STAFF'), async (_req, res) => {

@@ -8,6 +8,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { ForbiddenPage } from './pages/ForbiddenPage';
 import { UserGroupsPage } from './pages/UserGroupsPage';
 import { UsersPage } from './pages/UsersPage';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { useAppSelector } from './store';
 
 function LoginRoute() {
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="user-groups" element={<UserGroupsPage />} />
         <Route path="catalog" element={<CatalogPage manage />} />
         <Route path="bookings" element={<BookingsPage portal="admin" />} />
+        <Route path="notifications" element={<NotificationsPage />} />
       </Route>
       <Route path="/forbidden" element={<ForbiddenPage />} />
       <Route path="/dashboard" element={<RoleHome />} />

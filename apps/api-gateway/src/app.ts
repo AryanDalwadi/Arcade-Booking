@@ -15,6 +15,7 @@ const services = [
   ['catalog', 'CATALOG_SERVICE_URL'],
   ['booking', 'BOOKING_SERVICE_URL'],
   ['payment', 'PAYMENT_SERVICE_URL'],
+  ['notification', 'NOTIFICATION_SERVICE_URL'],
   ['analytics', 'ANALYTICS_SERVICE_URL'],
 ] as const;
 
@@ -80,7 +81,18 @@ export function createApp(
     ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)
       ? staffOrAdmin(request, response, next)
       : next());
-  app.use('/api/payment', staffOrAdmin);
+  app.use('/api/payment', (request, response, next) => {
+    const path = request.path.startsWith('/api/payment')
+      ? request.path.slice('/api/payment'.length) || '/'
+      : request.path;
+    if (path.startsWith('/webhooks/')) return next();
+    if (request.method === 'POST' && (path === '/orders' || /^\/orders\/[^/]+\/(simulate|confirm)$/.test(path))) {
+      return next();
+    }
+    if (request.method === 'GET' && path.startsWith('/payments/by-booking/')) return next();
+    return staffOrAdmin(request, response, next);
+  });
+  app.use('/api/notification', staffOrAdmin);
   app.use('/api/analytics', staffOrAdmin);
 
   for (const [name, configKey] of services) {

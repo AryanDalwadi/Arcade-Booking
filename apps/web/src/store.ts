@@ -5,6 +5,7 @@ import authReducer from './features/authSlice';
 import bookingsReducer from './features/bookingsSlice';
 import catalogReducer from './features/catalogSlice';
 import identityReducer from './features/identitySlice';
+import paymentsReducer from './features/paymentsSlice';
 
 export function makeStore() {
   return configureStore({
@@ -13,6 +14,7 @@ export function makeStore() {
       identity: identityReducer,
       catalog: catalogReducer,
       bookings: bookingsReducer,
+      payments: paymentsReducer,
     },
   });
 }

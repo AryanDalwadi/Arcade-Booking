@@ -5,6 +5,7 @@ import {
   createBookingSchema,
   eventTypes,
   inventoryRejectedEventSchema,
+  inventoryReleasedEventSchema,
   inventoryReservedEventSchema,
   paymentCompletedEventSchema,
   paymentFailedEventSchema,
@@ -27,11 +28,23 @@ export async function handleBookingEvent(db: Postgres, event: unknown): Promise<
        SET payment_status=$2,
            status=CASE
              WHEN $2='FAILED' THEN 'PAYMENT_FAILED'
+             WHEN status IN ('PAYMENT_FAILED', 'CANCELLED') THEN status
              WHEN inventory_status='RESERVED' THEN 'CONFIRMED'
              ELSE 'PENDING_PAYMENT'
            END
        WHERE id=$1`,
       [parsed.payload.bookingId, paymentStatus],
+    );
+    return;
+  }
+  if (eventType === eventTypes.inventoryReleased) {
+    const parsed = inventoryReleasedEventSchema.parse(event);
+    await db.query(
+      `UPDATE bookings
+       SET inventory_status='RELEASED',
+           status=CASE WHEN status='CONFIRMED' THEN status ELSE 'PAYMENT_FAILED' END
+       WHERE id=$1`,
+      [parsed.payload.bookingId],
     );
     return;
   }
@@ -57,8 +70,10 @@ export async function handleBookingEvent(db: Postgres, event: unknown): Promise<
 export function bookingRoutes(db: Postgres, redis: RedisAdapter, quotes: QuoteProvider): Router {
   const router = Router();
   router.post('/bookings', requireAuth, async (req, res) => {
-    const userId = readAuthContext(req)!.subject;
+    const auth = readAuthContext(req)!;
+    const userId = auth.subject;
     const input = createBookingSchema.parse(req.body);
+    const customerEmail = auth.email ?? input.customerEmail;
     let quote;
     try {
       quote = await quotes.quote(input.machineId, input.durationMinutes);
@@ -89,7 +104,16 @@ export function bookingRoutes(db: Postgres, redis: RedisAdapter, quotes: QuotePr
         const event = bookingCreatedEventSchema.parse({
           eventId: randomUUID(), eventType: eventTypes.bookingCreated, version: 1,
           occurredAt: new Date().toISOString(), correlationId: randomUUID(), producer: 'booking',
-          payload: { id: row.id, userId: row.user_id, machineId: row.machine_id, startAt: new Date(row.start_at).toISOString(), durationMinutes: row.duration_minutes, amountCents: row.amount_cents, currency: row.currency },
+          payload: {
+            id: row.id,
+            userId: row.user_id,
+            machineId: row.machine_id,
+            startAt: new Date(row.start_at).toISOString(),
+            durationMinutes: row.duration_minutes,
+            amountCents: row.amount_cents,
+            currency: row.currency,
+            ...(customerEmail ? { customerEmail } : {}),
+          },
         });
         await client.query('INSERT INTO outbox(event_id,topic,payload) VALUES($1,$2,$3)', [event.eventId, event.eventType, event]);
         return row;

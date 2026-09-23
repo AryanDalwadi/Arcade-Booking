@@ -14,7 +14,7 @@ npm run dev:web
 
 The app uses `VITE_API_GATEWAY_URL` as its only backend origin. React Router
 provides browser routes and the protected application shell. Redux Toolkit owns
-authentication and the identity, catalog, and booking API state. The returned
+authentication and the identity, catalog, booking, payment, and notification API state. The returned
 JWT and identity (`id`, `displayName`, `email`, and `roles`) are persisted under
 `arcade.auth.token` and `arcade.auth.user`.
 

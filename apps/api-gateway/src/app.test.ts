@@ -123,6 +123,48 @@ describe('API gateway', () => {
     })).status).toBe(200);
   });
 
+  it('lets customers create payment orders and accepts the Razorpay webhook without a JWT', async () => {
+    const upstream = await serveUpstream((_request, response) => {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ success: true }));
+    });
+    const secret = 'a-test-secret-with-32-characters';
+    const origin = await serve({ PAYMENT_SERVICE_URL: upstream, JWT_SECRET: secret });
+    const customer = jwt.sign({ sub: 'customer-1', roles: ['CUSTOMER'], email: 'player@example.com' }, secret);
+    expect((await fetch(`${origin}/api/payment/orders`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${customer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ bookingId: '30000000-0000-4000-8000-000000000001' }),
+    })).status).toBe(200);
+    expect((await fetch(`${origin}/api/payment/orders/30000000-0000-4000-8000-000000000001/confirm`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${customer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ orderId: 'order_test', paymentId: 'pay_test', signature: 'sig_test' }),
+    })).status).toBe(200);
+    expect((await fetch(`${origin}/api/payment/webhooks/razorpay`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    })).status).toBe(200);
+    expect((await fetch(`${origin}/api/payment/payments/20000000-0000-4000-8000-000000000001`, {
+      headers: { authorization: `Bearer ${customer}` },
+    })).status).toBe(403);
+  });
+
+  it('forwards a verified email claim', async () => {
+    const upstream = await serveUpstream((request, response) => {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ email: request.headers['x-auth-email'] }));
+    });
+    const secret = 'a-test-secret-with-32-characters';
+    const token = jwt.sign({ sub: 'user-123', roles: ['CUSTOMER'], email: 'player@example.com' }, secret);
+    const origin = await serve({ BOOKING_SERVICE_URL: upstream, JWT_SECRET: secret });
+    const response = await fetch(`${origin}/api/booking/bookings`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(await response.json()).toEqual({ email: 'player@example.com' });
+  });
+
   it('reserves identity group mutations for administrators', async () => {
     const secret = 'a-test-secret-with-32-characters';
     const origin = await serve({ JWT_SECRET: secret });

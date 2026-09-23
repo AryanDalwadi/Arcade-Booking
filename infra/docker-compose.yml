@@ -114,6 +114,7 @@ services:
           arcade.booking.payment-failed.v1 \
           arcade.inventory.reserved.v1 \
           arcade.inventory.rejected.v1 \
+          arcade.inventory.released.v1 \
           arcade.payment.completed.v1 \
           arcade.payment.failed.v1 \
           arcade.dead-letter.v1
@@ -134,6 +135,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    restart: unless-stopped
+    networks: [application, data]
+    ports:
+      - "1025:1025"
+      - "8025:8025"
 
   web:
     build:
@@ -170,6 +179,7 @@ services:
       CATALOG_SERVICE_URL: http://catalog:4102
       BOOKING_SERVICE_URL: http://booking:4103
       PAYMENT_SERVICE_URL: http://payment:4104
+      NOTIFICATION_SERVICE_URL: http://notification:4105
       ANALYTICS_SERVICE_URL: http://analytics:4107
       # Shared counters across gateway replicas. Redis outage fails open.
       RATE_LIMIT_STORE: redis
@@ -263,6 +273,10 @@ services:
         <<: *service-environment,
         PORT: "4104",
         DATABASE_URL: "postgres://payment_app:${PAYMENT_DB_PASSWORD:-payment_local}@postgres:5432/payment",
+        RAZORPAY_KEY_ID: "${RAZORPAY_KEY_ID:-}",
+        RAZORPAY_KEY_SECRET: "${RAZORPAY_KEY_SECRET:-}",
+        RAZORPAY_WEBHOOK_SECRET: "${RAZORPAY_WEBHOOK_SECRET:-}",
+        RESERVATION_HOLD_SECONDS: "${RESERVATION_HOLD_SECONDS:-600}",
       }
 
   notification:
@@ -283,6 +297,8 @@ services:
         <<: *service-environment,
         PORT: "4105",
         DATABASE_URL: "postgres://notification_app:${NOTIFICATION_DB_PASSWORD:-notification_local}@postgres:5432/notification",
+        SMTP_URL: "smtp://mailhog:1025",
+        MAIL_FROM: "arcade@localhost",
       }
 
   inventory:
@@ -303,6 +319,7 @@ services:
         <<: *service-environment,
         PORT: "4106",
         DATABASE_URL: "postgres://inventory_app:${INVENTORY_DB_PASSWORD:-inventory_local}@postgres:5432/inventory",
+        RESERVATION_HOLD_SECONDS: "${RESERVATION_HOLD_SECONDS:-600}",
       }
 
   analytics:

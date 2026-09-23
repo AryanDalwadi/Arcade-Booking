@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { PageTitle, ResourceMessage } from '../components/ui';
 import { createBooking, fetchBookings } from '../features/bookingsSlice';
+import { confirmRazorpayCheckout, createCheckoutOrder, simulateCheckout } from '../features/paymentsSlice';
+import { openRazorpayCheckout } from '../features/razorpayCheckout';
 import { fetchMachines } from '../features/catalogSlice';
 import { fetchUsers } from '../features/identitySlice';
 import { useAppDispatch, useAppSelector } from '../store';
@@ -16,6 +18,7 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
   const { users } = useAppSelector((state) => state.identity);
   const { bookings, listStatus, createStatus, listError, createError } =
     useAppSelector((state) => state.bookings);
+  const { payingBookingId, payError } = useAppSelector((state) => state.payments);
   const availableMachines = machines.filter((machine) => machine.status === 'ACTIVE');
   const visibleBookings = useMemo(
     () => portal === 'admin' ? bookings : bookings.filter((booking) => booking.userId === user?.id),
@@ -46,10 +49,47 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
         machineId,
         startAt: new Date(startAt).toISOString(),
         durationMinutes,
+        ...(user.email ? { customerEmail: user.email } : {}),
       })).unwrap();
       setStartAt('');
     } catch {
       // Redux state renders the API error.
+    }
+  }
+
+  async function pay(bookingId: string) {
+    try {
+      const order = await dispatch(createCheckoutOrder(bookingId)).unwrap();
+      if (order.alreadyPaid) {
+        await dispatch(fetchBookings(portal === 'admin' ? undefined : user?.id));
+        return;
+      }
+      if (order.provider === 'SIMULATED') {
+        await dispatch(simulateCheckout({ bookingId, outcome: 'SUCCEED' })).unwrap();
+      } else {
+        const paid = await openRazorpayCheckout({
+          keyId: order.keyId,
+          amountCents: order.amountCents,
+          currency: order.currency,
+          orderId: order.orderId,
+        });
+        await dispatch(confirmRazorpayCheckout({
+          bookingId,
+          orderId: paid.razorpay_order_id,
+          paymentId: paid.razorpay_payment_id,
+          signature: paid.razorpay_signature,
+        })).unwrap();
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          const latest = await dispatch(fetchBookings(portal === 'admin' ? undefined : user?.id)).unwrap();
+          const current = latest.find((booking) => booking.id === bookingId);
+          if (current && current.status !== 'PENDING_PAYMENT') break;
+        }
+        return;
+      }
+      await dispatch(fetchBookings(portal === 'admin' ? undefined : user?.id));
+    } catch {
+      // payError renders from Redux.
     }
   }
 
@@ -72,11 +112,12 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
         <label>Duration in minutes
           <input type="number" min={15} max={480} step={15} value={durationMinutes} onChange={(event) => setDurationMinutes(event.target.valueAsNumber)} required />
         </label>
-        <p className="sandbox-note">The final amount is calculated from Catalog pricing by the Booking service.</p>
+        <p className="sandbox-note">The final amount is calculated from Catalog pricing by the Booking service. Checkout uses Razorpay test mode (or a labeled simulated capture when test keys are absent).</p>
         <button className="primary" disabled={createStatus === 'loading' || !machineId}>
           {createStatus === 'loading' ? 'Reserving…' : 'Confirm booking'}
         </button>
         {createError && <div className="error" role="alert">{createError}</div>}
+        {payError && <div className="error" role="alert">{payError}</div>}
         {createStatus === 'succeeded' && <div className="notice" role="status">Booking created successfully.</div>}
       </form>}
       <section className="booking-list">
@@ -99,7 +140,20 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
                   <td>{new Date(booking.startAt).toLocaleString()}</td>
                   <td>{booking.durationMinutes} min</td>
                   <td>{formatMoney(booking.amountCents, booking.currency)}</td>
-                  <td><b className="status-pill">{booking.status.replaceAll('_', ' ')}</b></td>
+                  <td>
+                    <div className="status-cell">
+                      <b className="status-pill">{booking.status.replaceAll('_', ' ')}</b>
+                      {booking.status === 'PENDING_PAYMENT' && (
+                        <button
+                          className="primary pay-now"
+                          disabled={payingBookingId === booking.id}
+                          onClick={() => void pay(booking.id)}
+                        >
+                          {payingBookingId === booking.id ? 'Starting checkout…' : 'Pay now'}
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}</tbody>
             </table>

@@ -27,7 +27,7 @@ From the repository root:
 docker compose -f infra/docker-compose.yml config
 
 # Start only stateful dependencies (works before app workspaces are created).
-docker compose -f infra/docker-compose.yml up -d postgres kafka kafka-init redis
+docker compose -f infra/docker-compose.yml up -d postgres kafka kafka-init redis mailhog
 docker compose -f infra/docker-compose.yml ps
 
 # Follow logs or stop without deleting data.
