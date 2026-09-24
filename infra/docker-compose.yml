@@ -253,6 +253,7 @@ services:
         PORT: "4103",
         DATABASE_URL: "postgres://booking_app:${BOOKING_DB_PASSWORD:-booking_local}@postgres:5432/booking",
         CATALOG_SERVICE_URL: "http://catalog:4102",
+        INVENTORY_SERVICE_URL: "http://inventory:4106",
       }
 
   payment:

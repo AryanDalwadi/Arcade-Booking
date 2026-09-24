@@ -46,13 +46,7 @@ export async function handleEvent(db: Postgres, event: unknown, holdSeconds = 60
       'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))',
       [p.machineId],
     );
-    const conflict = await client.query(
-      `SELECT 1 FROM reservations WHERE machine_id=$1 AND status='RESERVED'
-       AND start_at < $2::timestamptz + ($3 || ' minutes')::interval
-       AND end_at > $2::timestamptz`,
-      [p.machineId,p.startAt,p.durationMinutes],
-    );
-    const rejected = Boolean(conflict.rowCount);
+    const rejected = await slotIsReserved(client, p.machineId, p.startAt, p.durationMinutes);
     await client.query(
       `INSERT INTO reservations(booking_id,machine_id,start_at,end_at,duration_minutes,status,committed,hold_expires_at)
        VALUES($1,$2,$3,$3::timestamptz + make_interval(mins => $4::integer),$4::integer,$5,false,
@@ -94,8 +88,9 @@ export async function releaseReservation(db: Postgres, bookingId: string, reason
   return db.transaction(async (client) => {
     const updated = await client.query<ReservationRow>(
       `UPDATE reservations
-       SET status='RELEASED', hold_expires_at=NULL
-       WHERE booking_id=$1 AND status='RESERVED' AND committed=false
+       SET status='RELEASED', committed=false, hold_expires_at=NULL
+       WHERE booking_id=$1 AND status='RESERVED'
+         AND NOT (committed=true AND hold_expires_at IS NULL)
        RETURNING booking_id, machine_id, start_at, duration_minutes, status`,
       [bookingId],
     );
@@ -129,7 +124,7 @@ export async function expireUnpaidHolds(db: Postgres): Promise<number> {
   const stale = await db.query<ReservationRow>(
     `SELECT booking_id, machine_id, start_at, duration_minutes, status
      FROM reservations
-     WHERE status='RESERVED' AND committed=false AND hold_expires_at IS NOT NULL AND hold_expires_at < now()
+     WHERE status='RESERVED' AND hold_expires_at IS NOT NULL AND hold_expires_at < now()
      ORDER BY hold_expires_at
      LIMIT 50`,
   );
@@ -139,8 +134,36 @@ export async function expireUnpaidHolds(db: Postgres): Promise<number> {
   return stale.rows.length;
 }
 
+export async function slotIsReserved(
+  db: Pick<Postgres, 'query'>,
+  machineId: string,
+  startAt: string,
+  durationMinutes: number,
+): Promise<boolean> {
+  const conflict = await db.query(
+    `SELECT 1 FROM reservations WHERE machine_id=$1 AND status='RESERVED'
+     AND start_at < $2::timestamptz + ($3 || ' minutes')::interval
+     AND end_at > $2::timestamptz`,
+    [machineId, startAt, durationMinutes],
+  );
+  return Boolean(conflict.rowCount);
+}
+
 export function inventoryRoutes(db: Postgres): Router {
   const router = Router();
+  router.get('/availability', async (req, res) => {
+    const machineId = String(req.query.machineId ?? '');
+    const startAt = String(req.query.startAt ?? '');
+    const durationMinutes = Number(req.query.durationMinutes);
+    if (!machineId || !startAt || !Number.isInteger(durationMinutes) || durationMinutes <= 0) {
+      return res.status(400).json({ success: false, message: 'machineId, startAt, and durationMinutes are required', code: 'VALIDATION_ERROR' });
+    }
+    const available = !(await slotIsReserved(db, machineId, startAt, durationMinutes));
+    return res.json({
+      success: true,
+      data: { machineId, startAt, durationMinutes, available },
+    });
+  });
   router.get('/reservations', requireAnyRole('ADMIN', 'STAFF'), async (_req, res) => {
     const table = 'reservations';
     res.json({ success: true, data: (await db.query(`SELECT * FROM ${table} ORDER BY created_at DESC LIMIT 100`)).rows });

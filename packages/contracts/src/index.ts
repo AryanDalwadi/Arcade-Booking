@@ -132,6 +132,12 @@ export const machineQuoteSchema = z.object({
   amountCents: z.number().int().positive(),
   currency: z.string().length(3),
 });
+export const slotAvailabilitySchema = z.object({
+  machineId: z.uuid(),
+  startAt: z.iso.datetime(),
+  durationMinutes: z.number().int().min(15).max(480),
+  available: z.boolean(),
+});
 
 export const bookingStatusSchema = z.enum([
   'PENDING_PAYMENT', 'CONFIRMED', 'PAYMENT_FAILED', 'CANCELLED',
@@ -259,6 +265,7 @@ export type Machine = z.infer<typeof machineSchema>;
 export type Game = z.infer<typeof gameSchema>;
 export type Pricing = z.infer<typeof pricingSchema>;
 export type MachineQuote = z.infer<typeof machineQuoteSchema>;
+export type SlotAvailability = z.infer<typeof slotAvailabilitySchema>;
 export type BookingStatus = z.infer<typeof bookingStatusSchema>;
 export type CreateBookingRequest = z.infer<typeof createBookingSchema>;
 export type Booking = z.infer<typeof bookingSchema>;
