@@ -7,6 +7,7 @@ const schema = z.object({
   PORT: z.coerce.number().int().positive().default(4003),
   DATABASE_URL: z.string().min(1).default('postgres://postgres:postgres@localhost:5432/arcade_booking'),
   CATALOG_SERVICE_URL: z.string().url().default('http://localhost:4002'),
+  INVENTORY_SERVICE_URL: z.string().url().default('http://localhost:4005'),
   KAFKA_BROKERS: z.string().default('localhost:9092'),
   KAFKA_CLIENT_ID: z.string().default('arcade-booking'),
   REDIS_URL: z.string().default('redis://localhost:6379'),

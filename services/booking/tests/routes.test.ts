@@ -20,11 +20,12 @@ async function serve(
   db: Postgres,
   redis: RedisAdapter,
   quotes: QuoteProvider,
+  inventory = { available: vi.fn(async () => true) },
 ): Promise<string> {
   const app = createHttpApp({
     dbReady: async () => true,
     dependencyReady: () => true,
-    routes: bookingRoutes(db, redis, quotes),
+    routes: bookingRoutes(db, redis, quotes, inventory),
   });
   const server = createServer(app).listen(0);
   servers.push(server);
@@ -165,5 +166,27 @@ describe('booking ownership and pricing', () => {
     });
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ code: 'BOOKING_HOLD_EXISTS' });
+  });
+
+  it('rejects a slot inventory already reserved', async () => {
+    const inventory = { available: vi.fn(async () => false) };
+    const origin = await serve({} as Postgres, {} as RedisAdapter, { quote: vi.fn(async () => quote()) }, inventory);
+    const response = await fetch(`${origin}/v1/bookings`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-auth-subject': '10000000-0000-4000-8000-000000000001',
+      },
+      body: JSON.stringify({
+        machineId: quote().machineId,
+        startAt: '2026-10-01T10:00:00.000Z',
+        durationMinutes: 60,
+      }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      code: 'BOOKING_SLOT_UNAVAILABLE',
+      message: 'This machine is already booked for that time',
+    });
   });
 });

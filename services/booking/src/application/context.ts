@@ -14,6 +14,7 @@ import { readAuthContext, requireAuth } from '@arcade/service-auth';
 import { Postgres } from '../adapters/postgres';
 import { RedisAdapter } from '../adapters/redis';
 import type { QuoteProvider } from '../adapters/catalog';
+import type { SlotAvailability } from '../adapters/inventory';
 import { HOLD_TTL_SECONDS, bookingHoldKeys } from './holds';
 
 export async function handleBookingEvent(db: Postgres, event: unknown): Promise<void> {
@@ -67,7 +68,12 @@ export async function handleBookingEvent(db: Postgres, event: unknown): Promise<
   }
 }
 
-export function bookingRoutes(db: Postgres, redis: RedisAdapter, quotes: QuoteProvider): Router {
+export function bookingRoutes(
+  db: Postgres,
+  redis: RedisAdapter,
+  quotes: QuoteProvider,
+  inventory: SlotAvailability,
+): Router {
   const router = Router();
   router.post('/bookings', requireAuth, async (req, res) => {
     const auth = readAuthContext(req)!;
@@ -82,6 +88,23 @@ export function bookingRoutes(db: Postgres, redis: RedisAdapter, quotes: QuotePr
         success: false,
         message: 'The selected machine cannot be priced for this booking',
         code: 'BOOKING_QUOTE_UNAVAILABLE',
+      });
+    }
+    let available: boolean;
+    try {
+      available = await inventory.available(input.machineId, input.startAt, input.durationMinutes);
+    } catch {
+      return res.status(503).json({
+        success: false,
+        message: 'Could not confirm machine availability',
+        code: 'BOOKING_SLOT_CHECK_UNAVAILABLE',
+      });
+    }
+    if (!available) {
+      return res.status(409).json({
+        success: false,
+        message: 'This machine is already booked for that time',
+        code: 'BOOKING_SLOT_UNAVAILABLE',
       });
     }
     const holdKeys = bookingHoldKeys(input.machineId, input.startAt, input.durationMinutes);
@@ -119,9 +142,8 @@ export function bookingRoutes(db: Postgres, redis: RedisAdapter, quotes: QuotePr
         return row;
       });
       return res.status(201).json({ success: true, data: booking });
-    } catch (error) {
+    } finally {
       await redis.delete(holdKeys);
-      throw error;
     }
   });
   router.get('/bookings', requireAuth, async (req, res) => {

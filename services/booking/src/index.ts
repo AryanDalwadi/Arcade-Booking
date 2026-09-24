@@ -5,6 +5,7 @@ import { Postgres } from './adapters/postgres';
 import { KafkaAdapter } from './adapters/kafka';
 import { RedisAdapter } from './adapters/redis';
 import { CatalogClient } from './adapters/catalog';
+import { InventoryClient } from './adapters/inventory';
 import { createHttpApp } from './http/app';
 import { bookingRoutes, handleBookingEvent } from './application/context';
 
@@ -12,6 +13,7 @@ const db = new Postgres(env.DATABASE_URL);
 const kafka = new KafkaAdapter(env.KAFKA_CLIENT_ID, env.KAFKA_BROKERS.split(',').map((x) => x.trim()));
 const redis = new RedisAdapter(env.REDIS_URL);
 const catalog = new CatalogClient(env.CATALOG_SERVICE_URL);
+const inventory = new InventoryClient(env.INVENTORY_SERVICE_URL);
 let dependencyReady = false;
 let acceptingTraffic = true;
 let relayTimer: NodeJS.Timeout | undefined;
@@ -57,7 +59,7 @@ const app = createHttpApp({
   dbReady: () => db.ready(),
   dependencyReady: () => dependencyReady,
   acceptingTraffic: () => acceptingTraffic,
-  routes: bookingRoutes(db, redis, catalog),
+  routes: bookingRoutes(db, redis, catalog, inventory),
 });
 const server = createServer(app);
 server.listen(env.PORT, () => log('info', 'service.listen', {

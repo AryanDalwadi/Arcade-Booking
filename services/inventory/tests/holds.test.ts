@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { eventTypes } from '@arcade/contracts';
 import { Postgres } from '../src/adapters/postgres';
-import { expireUnpaidHolds, handleEvent, releaseReservation } from '../src/application/context';
+import { expireUnpaidHolds, handleEvent, releaseReservation, slotIsReserved } from '../src/application/context';
 
 const bookingId = '30000000-0000-4000-8000-000000000001';
 
@@ -12,7 +12,7 @@ describe('unpaid reservation holds', () => {
     const db = {
       transaction: async (work: (client: { query: ReturnType<typeof vi.fn> }) => Promise<unknown>) => work({
         query: vi.fn(async (sql: string, values?: unknown[]) => {
-          if (sql.includes("status='RESERVED' AND committed=false")) {
+          if (sql.includes("status='RESERVED'") && sql.includes('hold_expires_at IS NULL')) {
             return {
               rows: [{
                 booking_id: bookingId,
@@ -86,5 +86,11 @@ describe('unpaid reservation holds', () => {
       },
     });
     expect(String(query.mock.calls[0]?.[0])).toContain('committed=true');
+  });
+
+  it('reports a reserved machine slot as unavailable', async () => {
+    const query = vi.fn(async () => ({ rows: [{ '?column?': 1 }], rowCount: 1 }));
+    expect(await slotIsReserved({ query } as unknown as Postgres, randomUUID(), new Date().toISOString(), 60)).toBe(true);
+    expect(String(query.mock.calls[0]?.[0])).toContain("status='RESERVED'");
   });
 });
