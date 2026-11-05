@@ -274,6 +274,7 @@ services:
         <<: *service-environment,
         PORT: "4104",
         DATABASE_URL: "postgres://payment_app:${PAYMENT_DB_PASSWORD:-payment_local}@postgres:5432/payment",
+        BOOKING_SERVICE_URL: "http://booking:4103",
         RAZORPAY_KEY_ID: "${RAZORPAY_KEY_ID:-}",
         RAZORPAY_KEY_SECRET: "${RAZORPAY_KEY_SECRET:-}",
         RAZORPAY_WEBHOOK_SECRET: "${RAZORPAY_WEBHOOK_SECRET:-}",

@@ -146,6 +146,19 @@ export function bookingRoutes(
       await redis.delete(holdKeys);
     }
   });
+  router.get('/bookings/:id', requireAuth, async (req, res) => {
+    const auth = readAuthContext(req)!;
+    const found = await db.query('SELECT * FROM bookings WHERE id=$1', [req.params.id]);
+    const row = found.rows[0];
+    if (!row) {
+      return res.status(404).json({ success: false, message: 'Booking not found', code: 'BOOKING_NOT_FOUND' });
+    }
+    const staff = auth.roles.has('ADMIN') || auth.roles.has('STAFF');
+    if (!staff && row.user_id !== auth.subject) {
+      return res.status(403).json({ success: false, message: 'You can only view your own booking', code: 'BOOKING_FORBIDDEN' });
+    }
+    return res.json({ success: true, data: row });
+  });
   router.get('/bookings', requireAuth, async (req, res) => {
     const auth = readAuthContext(req)!;
     const userId = auth.subject;

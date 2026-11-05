@@ -11,7 +11,8 @@ import {
   simulatePaymentSchema,
   type PaymentStatus,
 } from '@arcade/contracts';
-import { readAuthContext, requireAnyRole, requireAuth } from '@arcade/service-auth';
+import { readAuthContext, requireAnyRole, requireAuth, type AuthContext } from '@arcade/service-auth';
+import type { PayableBooking } from '../adapters/booking';
 import { Postgres } from '../adapters/postgres';
 import type { OrderGateway } from '../adapters/razorpay';
 import type { RequestWithRawBody } from '../http/app';
@@ -35,6 +36,7 @@ export type PaymentRouteOptions = {
   webhookSecret?: string;
   keySecret?: string;
   publicKeyId: string;
+  lookupPayableBooking?: (bookingId: string, auth: AuthContext) => Promise<PayableBooking | null>;
 };
 
 /** Learning adapter only. It never contacts or charges a real provider. */
@@ -118,23 +120,67 @@ export async function expirePendingPayments(db: Postgres, holdSeconds: number): 
   return stale.rows.length;
 }
 
-export async function handleInventoryReserved(db: Postgres, event: unknown): Promise<void> {
-  const parsed = inventoryReservedEventSchema.parse(event);
-  const p = parsed.payload;
-  if (!p.userId) return;
+export async function ensurePendingPayment(
+  db: Postgres,
+  input: { bookingId: string; userId: string; customerEmail?: string; amountCents: number; currency: string },
+): Promise<void> {
   await db.query(
     `INSERT INTO payments(booking_id,user_id,customer_email,amount_cents,currency,idempotency_key,status,provider,provider_reference)
      VALUES($1,$2,$3,$4,$5,$6,'PENDING','SIMULATED','pending')
      ON CONFLICT (idempotency_key) DO NOTHING`,
     [
-      p.bookingId,
-      p.userId,
-      p.customerEmail ?? null,
-      p.amountCents,
-      p.currency,
-      `booking:${p.bookingId}`,
+      input.bookingId,
+      input.userId,
+      input.customerEmail ?? null,
+      input.amountCents,
+      input.currency,
+      `booking:${input.bookingId}`,
     ],
   );
+}
+
+export async function handleInventoryReserved(db: Postgres, event: unknown): Promise<void> {
+  const parsed = inventoryReservedEventSchema.parse(event);
+  const p = parsed.payload;
+  if (!p.userId) return;
+  await ensurePendingPayment(db, {
+    bookingId: p.bookingId,
+    userId: p.userId,
+    amountCents: p.amountCents,
+    currency: p.currency,
+    ...(p.customerEmail ? { customerEmail: p.customerEmail } : {}),
+  });
+}
+
+async function paymentForBooking(db: Postgres, bookingId: string): Promise<PaymentRow | undefined> {
+  const found = await db.query<PaymentRow>(
+    'SELECT * FROM payments WHERE booking_id=$1 ORDER BY created_at DESC LIMIT 1',
+    [bookingId],
+  );
+  return found.rows[0];
+}
+
+async function loadOrCreatePayment(
+  db: Postgres,
+  bookingId: string,
+  auth: AuthContext,
+  options: PaymentRouteOptions,
+): Promise<PaymentRow | undefined> {
+  const existing = await paymentForBooking(db, bookingId);
+  if (existing) return existing;
+  const booking = await options.lookupPayableBooking?.(bookingId, auth);
+  if (!booking) return undefined;
+  if (booking.status !== 'PENDING_PAYMENT' && booking.status !== 'PAYMENT_FAILED') return undefined;
+  const staff = auth.roles.has('ADMIN') || auth.roles.has('STAFF');
+  if (!staff && booking.userId !== auth.subject) return undefined;
+  await ensurePendingPayment(db, {
+    bookingId: booking.id,
+    userId: booking.userId,
+    amountCents: booking.amountCents,
+    currency: booking.currency,
+    ...(booking.customerEmail ? { customerEmail: booking.customerEmail } : {}),
+  });
+  return paymentForBooking(db, bookingId);
 }
 
 function signaturesMatch(payload: string, signature: string, secret: string): boolean {
@@ -194,11 +240,7 @@ export function paymentRoutes(db: Postgres, options: PaymentRouteOptions): Route
   router.post('/orders', requireAuth, async (req, res) => {
     const auth = readAuthContext(req)!;
     const input = createPaymentOrderSchema.parse(req.body);
-    const found = await db.query<PaymentRow>(
-      'SELECT * FROM payments WHERE booking_id=$1 ORDER BY created_at DESC LIMIT 1',
-      [input.bookingId],
-    );
-    const payment = found.rows[0];
+    const payment = await loadOrCreatePayment(db, input.bookingId, auth, options);
     if (!payment) {
       return res.status(404).json({ success: false, message: 'No payable booking was found', code: 'PAYMENT_NOT_FOUND' });
     }
@@ -265,11 +307,7 @@ export function paymentRoutes(db: Postgres, options: PaymentRouteOptions): Route
   router.post('/orders/:bookingId/simulate', requireAuth, async (req, res) => {
     const auth = readAuthContext(req)!;
     const input = simulatePaymentSchema.parse(req.body ?? {});
-    const found = await db.query<PaymentRow>(
-      'SELECT * FROM payments WHERE booking_id=$1 ORDER BY created_at DESC LIMIT 1',
-      [req.params.bookingId],
-    );
-    const payment = found.rows[0];
+    const payment = await loadOrCreatePayment(db, String(req.params.bookingId), auth, options);
     if (!payment) {
       return res.status(404).json({ success: false, message: 'No payable booking was found', code: 'PAYMENT_NOT_FOUND' });
     }
@@ -298,11 +336,7 @@ export function paymentRoutes(db: Postgres, options: PaymentRouteOptions): Route
     if (!secret) {
       return res.status(503).json({ success: false, message: 'Razorpay key secret is not configured', code: 'CONFIRM_UNAVAILABLE' });
     }
-    const found = await db.query<PaymentRow>(
-      'SELECT * FROM payments WHERE booking_id=$1 ORDER BY created_at DESC LIMIT 1',
-      [req.params.bookingId],
-    );
-    const payment = found.rows[0];
+    const payment = await loadOrCreatePayment(db, String(req.params.bookingId), auth, options);
     if (!payment) {
       return res.status(404).json({ success: false, message: 'No payable booking was found', code: 'PAYMENT_NOT_FOUND' });
     }

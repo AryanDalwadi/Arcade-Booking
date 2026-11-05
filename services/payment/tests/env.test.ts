@@ -6,6 +6,7 @@ describe('payment environment', () => {
     const parsed = parseEnv({});
     expect(parsed.PORT).toBe(4004);
     expect(parsed.DATABASE_URL).toContain('arcade_payment');
+    expect(parsed.BOOKING_SERVICE_URL).toBe('http://localhost:4003');
   });
 });
 

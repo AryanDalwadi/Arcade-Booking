@@ -7,7 +7,7 @@ import {
 } from '@arcade/contracts';
 
 const MAX_ATTEMPTS = 3;
-const GROUP_ID = 'arcade-payment-v1';
+const GROUP_ID = 'arcade-payment-v2';
 
 export class KafkaAdapter {
   private readonly kafka: Kafka;
@@ -34,7 +34,7 @@ export class KafkaAdapter {
     await this.connectProducer();
     this.consumer = this.kafka.consumer({ groupId: GROUP_ID });
     await this.consumer.connect();
-    await this.consumer.subscribe({ topics, fromBeginning: false });
+    await this.consumer.subscribe({ topics, fromBeginning: true });
     this.connected = true;
     await this.consumer.run({
       eachMessage: async ({ topic, partition, message }) => {

@@ -1,6 +1,6 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import type { ApiSuccess, CheckoutOrder, ConfirmRazorpayPaymentRequest, NotificationDelivery } from '@arcade/contracts';
-import { api } from '../api';
+import { ApiError, api } from '../api';
 import { logout } from './authSlice';
 
 type WireDelivery = NotificationDelivery & {
@@ -41,11 +41,21 @@ const initialState: PaymentsState = {
 export const createCheckoutOrder = createAsyncThunk<CheckoutOrder, string>(
   'payments/createCheckoutOrder',
   async (bookingId) => {
-    const response = await api<ApiSuccess<CheckoutOrder>>('/api/payment/orders', {
-      method: 'POST',
-      body: JSON.stringify({ bookingId }),
-    });
-    return response.data;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      try {
+        const response = await api<ApiSuccess<CheckoutOrder>>('/api/payment/orders', {
+          method: 'POST',
+          body: JSON.stringify({ bookingId }),
+        });
+        return response.data;
+      } catch (error) {
+        lastError = error;
+        if (!(error instanceof ApiError) || error.status !== 404) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 700));
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error('Checkout is still preparing. Try Pay now again in a few seconds.');
   },
 );
 
