@@ -9,6 +9,7 @@ const schema = z.object({
   KAFKA_BROKERS: z.string().default('localhost:9092'),
   KAFKA_CLIENT_ID: z.string().default('arcade-payment'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
+  BOOKING_SERVICE_URL: z.string().url().default('http://localhost:4003'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   RAZORPAY_KEY_ID: z.string().optional().transform((value) => value?.trim() || undefined),
   RAZORPAY_KEY_SECRET: z.string().optional().transform((value) => value?.trim() || undefined),

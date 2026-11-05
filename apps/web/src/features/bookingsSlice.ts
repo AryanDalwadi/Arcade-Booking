@@ -73,12 +73,14 @@ const bookingsSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchBookings.pending, (state) => {
-        state.listStatus = 'loading';
+        if (state.bookings.length === 0) state.listStatus = 'loading';
         state.listError = null;
       })
       .addCase(fetchBookings.fulfilled, (state, action) => {
         state.listStatus = 'succeeded';
-        state.bookings = action.payload;
+        const byId = new Map(state.bookings.map((booking) => [booking.id, booking]));
+        for (const booking of action.payload) byId.set(booking.id, booking);
+        state.bookings = [...byId.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
       })
       .addCase(fetchBookings.rejected, (state, action) => {
         state.listStatus = 'failed';

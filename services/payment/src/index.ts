@@ -6,6 +6,7 @@ import { KafkaAdapter } from './adapters/kafka';
 import { RedisAdapter } from './adapters/redis';
 import { createHttpApp } from './http/app';
 import { expirePendingPayments, handleInventoryReserved, paymentRoutes } from './application/context';
+import { bookingLookup } from './adapters/booking';
 import { RazorpayOrderGateway, SimulatedOrderGateway } from './adapters/razorpay';
 
 const orderGateway = env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET
@@ -61,6 +62,7 @@ const app = createHttpApp({
     webhookSecret: env.RAZORPAY_WEBHOOK_SECRET,
     keySecret: env.RAZORPAY_KEY_SECRET,
     publicKeyId,
+    lookupPayableBooking: bookingLookup(env.BOOKING_SERVICE_URL),
   }),
 });
 const server = createServer(app);

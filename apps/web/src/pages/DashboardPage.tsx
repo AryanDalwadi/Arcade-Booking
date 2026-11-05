@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { PageTitle, ResourceMessage } from '../components/ui';
+import { PageTitle, ResourceMessage, cx } from '../components/ui';
 import { fetchBookings } from '../features/bookingsSlice';
 import { fetchMachines } from '../features/catalogSlice';
 import { fetchUsers } from '../features/identitySlice';
@@ -71,14 +71,17 @@ export function DashboardPage({ portal }: { portal: 'customer' | 'admin' }) {
         eyebrow={portal === 'admin' ? 'ADMINISTRATION' : 'PLAYER PORTAL'}
         title={portal === 'admin' ? 'Arcade command center' : 'My arcade dashboard'}
       />
-      <div className="stats">
+      <div className={cx(
+        'mb-[22px] grid gap-3.5 max-lg:grid-cols-2 max-sm:grid-cols-1',
+        portal === 'admin' ? 'grid-cols-4' : 'grid-cols-3',
+      )}>
         <Stat label="Gateway" value={health} accent />
         {portal === 'admin' && <Stat label="Players" value={loading ? '—' : String(users.length)} />}
         <Stat label="Machines ready" value={loading ? '—' : String(machines.filter((machine) => machine.status === 'ACTIVE').length)} />
         <Stat label={portal === 'admin' ? 'All bookings' : 'My bookings'} value={loading ? '—' : String(visibleBookings.length)} />
       </div>
       {portal === 'admin' && utilization && (
-        <p>
+        <p className="mb-5 text-sm leading-6 text-muted">
           Today&apos;s reserved minutes (projection {utilization.projection}): {utilization.venueMinutes}
           {' '}across {utilization.bookingCount} bookings on {utilization.day}.
           Freshness: {utilization.freshness ?? 'no reserved events yet'}.
@@ -95,5 +98,13 @@ export function DashboardPage({ portal }: { portal: 'customer' | 'admin' }) {
 }
 
 function Stat({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
-  return <article className={`stat ${accent ? 'accent' : ''}`}><span>{label}</span><strong>{value}</strong></article>;
+  return (
+    <article className={cx(
+      'flex min-h-28 flex-col justify-between rounded-lg border border-line bg-linear-to-br from-[#1b1d32e6] to-[#0e101ee6] p-5.5',
+      accent && 'border-mint/47 shadow-[inset_0_0_28px_#55f8d20b]',
+    )}>
+      <span className="text-xs uppercase text-muted">{label}</span>
+      <strong className="text-[26px]">{value}</strong>
+    </article>
+  );
 }

@@ -122,6 +122,27 @@ describe('booking ownership and pricing', () => {
     ]);
   });
 
+  it('lets a customer read their own booking by id', async () => {
+    const query = vi.fn(async () => ({
+      rows: [{
+        id: '30000000-0000-4000-8000-000000000001',
+        user_id: '10000000-0000-4000-8000-000000000001',
+        status: 'PENDING_PAYMENT',
+      }],
+      rowCount: 1,
+    }));
+    const db = { query } as unknown as Postgres;
+    const origin = await serve(db, {} as RedisAdapter, { quote: vi.fn() });
+    const response = await fetch(`${origin}/v1/bookings/30000000-0000-4000-8000-000000000001`, {
+      headers: {
+        'x-auth-subject': '10000000-0000-4000-8000-000000000001',
+        'x-auth-roles': 'CUSTOMER',
+      },
+    });
+    expect(response.status).toBe(200);
+    expect(query.mock.calls[0]?.[1]).toEqual(['30000000-0000-4000-8000-000000000001']);
+  });
+
   it('scopes customers to themselves and lets staff read all bookings', async () => {
     const query = vi.fn(async () => ({ rows: [], rowCount: 0 }));
     const db = { query } as unknown as Postgres;
