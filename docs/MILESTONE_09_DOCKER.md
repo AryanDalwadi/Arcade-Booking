@@ -25,7 +25,7 @@ without `--build` keeps the old recipe.
 
 | File | Role |
 | --- | --- |
-| `.dockerignore` | Keep git, `.env`, tests, and legacy apps out of the build context |
+| `.dockerignore` | Keep git, `.env`, and tests out of the build context |
 | `infra/docker/node.Dockerfile` | Multi-stage image for every Node service |
 | `apps/api-gateway/Dockerfile` | Gateway-only image, `node dist/server.js` |
 | `apps/web/Dockerfile` | Vite build → unprivileged nginx |
@@ -46,7 +46,7 @@ ship `tsc` and devDependencies forever.
 
 - Database passwords (`DATABASE_URL` arrives at **container start**)
 - `JWT_SECRET` (Compose injects it)
-- Git history, `backend/`, `frontend/`, unit tests (`.dockerignore`)
+- Git history and unit tests (`.dockerignore`)
 
 The web image **does** bake `VITE_API_GATEWAY_URL` because the browser cannot
 read Docker env. That URL is public (`http://localhost:4000`), not a secret.

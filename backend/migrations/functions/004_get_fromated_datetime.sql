@@ -1,7 +1,0 @@
-CREATE OR REPLACE FUNCTION dbo.get_fromated_datetime(in_time TIMESTAMP)
-RETURNS VARCHAR(50)
-LANGUAGE sql
-IMMUTABLE
-AS $$
-  SELECT COALESCE(to_char(in_time, 'DD-MM-YYYY HH12:MI:SS AM'), '');
-$$;

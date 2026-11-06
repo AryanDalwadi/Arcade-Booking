@@ -4,8 +4,6 @@ node_modules/
 !.env.example
 error.log
 *.log
-backend/error.log
-frontend/build/
 dist/
 build/
 coverage/

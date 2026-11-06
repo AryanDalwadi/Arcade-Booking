@@ -42,8 +42,6 @@ infra/
   k8s/                    Kubernetes manifests (learning target)
   aws/                    AWS target map (Terraform; not a live account)
 docs/                     Learning and interview guides
-backend/                   Legacy backend retained during migration
-frontend/                  Legacy frontend retained during migration
 ```
 
 ## Local development

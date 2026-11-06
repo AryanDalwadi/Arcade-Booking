@@ -3,25 +3,24 @@
 > **Target stack:** React + Vite + TypeScript, Node.js/Express microservices,
 > PostgreSQL, Kafka, Redis, Docker, Kubernetes, GitHub Actions, and AWS.
 >
-> The original `backend/` and `frontend/` applications remain temporarily as
-> migration references. New development belongs in `apps/`, `services/`,
-> `packages/`, and `infra/`.
+
+> New development belongs in `apps/`, `services/`, `packages/`, and `infra/`.
 
 ---
 
 ## Table of Contents
 
+
 1. [Monorepo Layout](#1-monorepo-layout)
 2. [Database Layer](#2-database-layer)
-3. [Backend — Node.js / Express](#3-backend--nodejs--express)
+3. [Application code (current)](#3-application-code-current)
 4. [JWT Authentication](#4-jwt-authentication)
-5. [Frontend — React + Vite (or CRA)](#5-frontend--react--vite-or-cra)
-6. [Custom Component Library](#6-custom-component-library)
-7. [Environment Variables](#7-environment-variables)
-8. [Naming Conventions](#8-naming-conventions)
-9. [Response Contracts](#9-response-contracts)
-10. [Quick Checklist for a New Domain](#10-quick-checklist-for-a-new-domain)
-11. [PostgreSQL Interview Guide](#11-postgresql-interview-guide)
+5. [Environment Variables](#5-environment-variables)
+6. [Naming Conventions](#6-naming-conventions)
+7. [Response Contracts](#7-response-contracts)
+8. [Quick Checklist for a New Domain](#8-quick-checklist-for-a-new-domain)
+9. [PostgreSQL Interview Guide](#9-postgresql-interview-guide)
+
 
 ---
 
@@ -48,124 +47,13 @@ project-root/
 │   ├── docker/                  # Local integrated environment
 │   ├── kubernetes/              # Deployments, Services, probes, Ingress, HPA
 │   └── aws/                     # EKS/RDS/MSK/ElastiCache deployment starter
-├── docs/                        # Milestone and interview learning guides
-├── backend/                     # Legacy API retained during migration
-└── frontend/                    # Legacy CRA client retained during migration
+└── docs/                        # Milestone and interview learning guides
 ```
 
 Each service owns its PostgreSQL database or schema. A service must never query
 another service's tables; cross-domain communication uses a versioned HTTP API
 or Kafka event. `booking-service` is the arcade-domain equivalent of an order
 service.
-
-### 1.2 Legacy modular-monolith layout
-
-```
-project-root/
-├── backend/
-│   ├── migrations/
-│   │   ├── tables/              # DDL: 001_<table>.sql, 002_<table>.sql ...
-│   │   ├── stored_procedures/   # PostgreSQL SQL functions (legacy folder name)
-│   │   └── functions/           # Shared PostgreSQL functions
-│   ├── scripts/
-│   │   └── run-migrations.js    # Migration runner
-│   ├── src/
-│   │   ├── config/
-│   │   │   ├── db.js            # PostgreSQL pool (connectPool / getPool / closePool)
-│   │   │   └── env.js           # Typed env vars
-│   │   ├── middleware/
-│   │   │   ├── auth.middleware.js     # JWT Bearer verify → req.user
-│   │   │   ├── validate.middleware.js # Joi schema validation
-│   │   │   └── error.middleware.js    # AppError class + global error handler
-│   │   ├── router/
-│   │   │   ├── index.js         # Mounts all sub-routers under /api
-│   │   │   ├── health.router.js
-│   │   │   ├── auth.router.js
-│   │   │   ├── user.router.js
-│   │   │   └── userGroup.router.js
-│   │   ├── controller/          # Thin: call service, return response helper
-│   │   ├── service/             # Business logic, throws AppError
-│   │   ├── data_access/         # Parameterized PostgreSQL queries via pool.query()
-│   │   ├── validation/          # Joi schemas, one file per domain
-│   │   ├── helper/
-│   │   │   └── response.helper.js    # success / error / paginatedList
-│   │   ├── utils/
-│   │   │   ├── bcrypt.util.js
-│   │   │   └── jwt.util.js
-│   │   ├── logger/
-│   │   │   └── logger.js
-│   │   ├── app.js               # Express setup (helmet, cors, body-parser, router mount)
-│   │   └── server.js            # connectPool → app.listen + graceful shutdown
-│   ├── nodemon.json
-│   ├── package.json
-│   └── .env.example
-│
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── api/
-│   │   │   └── axios.js         # Axios instance + Bearer interceptor
-│   │   ├── assets/
-│   │   ├── components/          # Shared / reusable UI components
-│   │   │   ├── index.js         # Barrel export for all components
-│   │   │   ├── common/
-│   │   │   │   ├── CustomButton.jsx
-│   │   │   │   └── PageHeader.jsx
-│   │   │   ├── dialog/
-│   │   │   │   └── CustomDialog.jsx
-│   │   │   ├── list/
-│   │   │   │   └── CardList.jsx
-│   │   │   └── form/
-│   │   │       ├── TextField.jsx
-│   │   │       ├── AllDropdown.jsx
-│   │   │       ├── AutoDropdown.jsx
-│   │   │       ├── DatePickerField.jsx
-│   │   │       ├── TimePickerField.jsx
-│   │   │       ├── DateTimePickerField.jsx
-│   │   │       └── DateMonthYearPicker.jsx
-│   │   ├── context/
-│   │   │   └── AuthContext.jsx
-│   │   ├── features/            # One folder per domain
-│   │   │   ├── users/
-│   │   │   │   ├── userSlice.js
-│   │   │   │   ├── userService.js
-│   │   │   │   ├── userSelectors.js
-│   │   │   │   └── user.types.js
-│   │   │   └── userGroups/
-│   │   │       ├── userGroupSlice.js
-│   │   │       ├── userGroupService.js
-│   │   │       ├── userGroupSelectors.js
-│   │   │       └── userGroup.types.js
-│   │   ├── hooks/
-│   │   │   └── useAuth.js
-│   │   ├── layouts/
-│   │   │   └── MainLayout.jsx
-│   │   ├── pages/
-│   │   │   ├── Login.jsx
-│   │   │   ├── Dashboard.jsx
-│   │   │   ├── UserList.jsx
-│   │   │   └── UserGroupList.jsx
-│   │   ├── routes/
-│   │   │   ├── AppRoutes.jsx
-│   │   │   └── ProtectedRoute.jsx
-│   │   ├── services/
-│   │   │   └── authService.js   # Auth-specific API calls (login, register)
-│   │   ├── store/
-│   │   │   ├── index.js         # configureStore — registers all slice reducers
-│   │   │   └── hooks.js         # useAppDispatch / useAppSelector
-│   │   ├── theme/
-│   │   │   └── theme.js         # MUI / Ant Design theme overrides
-│   │   ├── utils/
-│   │   │   └── storage.js       # localStorage helpers
-│   │   ├── App.js
-│   │   └── index.js
-│   ├── package.json
-│   └── .env.example
-│
-├── .gitignore
-├── PROJECT_STRUCTURE.md
-└── README.md
-```
 
 ---
 
@@ -237,218 +125,18 @@ LIMIT $2 OFFSET ($3 - 1) * $2;
 
 ---
 
-## 3. Backend — Node.js / Express
+## 3. Application code (current)
 
-### 3.1 Packages
+The former monolith `backend/` and `frontend/` directories were removed.
 
-```json
-{
-  "dependencies": {
-    "express": "^5.x",
-    "pg": "^8.x",
-    "bcrypt": "^6.x",
-    "jsonwebtoken": "^9.x",
-    "joi": "^18.x",
-    "cors": "^2.x",
-    "helmet": "^8.x",
-    "dotenv": "^17.x"
-  },
-  "devDependencies": {
-    "nodemon": "^3.x"
-  }
-}
-```
+| Area | Location |
+| --- | --- |
+| Web UI | `apps/web/` — React, Vite, TypeScript, Tailwind |
+| API edge | `apps/api-gateway/` |
+| Domain services | `services/*` (identity, catalog, booking, payment, …) |
+| Shared contracts | `packages/contracts/`, `packages/service-auth/` |
 
-### 3.2 Entry Points
-
-**`src/server.js`** — DB connect → listen → graceful shutdown on SIGINT/SIGTERM
-
-**`src/app.js`** — Express middlewares → mount `/api` router
-
-```js
-// app.js
-app.use(helmet());
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use("/api", router);
-app.use(notFoundHandler);
-app.use(errorHandler);
-```
-
-### 3.3 DB Connection (`src/config/db.js`)
-
-Exposes a singleton PostgreSQL `pg.Pool`.
-
-| Export          | Purpose                                              |
-| --------------- | ---------------------------------------------------- |
-| `connectPool()` | Initialises the pool and verifies it with `SELECT 1` |
-| `getPool()`     | Returns pool or throws if disconnected               |
-| `isConnected()` | Boolean health check                                 |
-| `closePool()`   | Graceful shutdown                                    |
-
-PostgreSQL uses host, port, database, user, and password credentials. Local development normally sets `DB_SSL=false`; managed production databases should use TLS.
-
-### 3.4 Layer Flow
-
-```
-HTTP Request
-  └─► router/index.js            ← mounts sub-routers at /api
-        └─► *.router.js          ← authenticate → validate(schema) → controller.fn
-              └─► controller/    ← call service, send response via helper
-                    └─► service/ ← business logic, throws AppError
-                          └─► data_access/  ← parameterized pool.query(text, values)
-```
-
-### 3.5 Router (`src/router/*.router.js`)
-
-```js
-// Always: authenticate middleware first, then Joi validate, then controller
-router.post("/get", authenticate, validate(getSchema), controller.getItems);
-router.post(
-  "/create",
-  authenticate,
-  validate(createSchema),
-  controller.createItem,
-);
-router.post(
-  "/update",
-  authenticate,
-  validate(updateSchema),
-  controller.updateItem,
-);
-```
-
-> All list/filter/mutate endpoints use **POST** so complex filter objects travel in the request body.
-
-### 3.6 Controller (thin — no business logic)
-
-```js
-const getItems = async (req, res, next) => {
-  try {
-    const result = await itemService.getItems(req.body);
-    return response.paginatedList(res, {
-      summary: result.summary,
-      data: result.data,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-```
-
-### 3.7 Service (business logic layer)
-
-```js
-const getItems = async (filters) => {
-  return itemDa.getItems({
-    name: filters.name || "",
-    pageSize: filters.page_size,
-    currentPage: filters.current_page,
-  });
-};
-
-// Throw AppError for known domain errors
-const updateItem = async (id, payload) => {
-  const existing = await itemDa.findById(id);
-  if (!existing) throw new AppError("Item not found", 404);
-  return itemDa.updateItem({ id, ...payload });
-};
-```
-
-### 3.8 Data Access (all PostgreSQL calls here)
-
-```js
-// Always use $1, $2... placeholders. Never concatenate user input into SQL.
-const getItems = async ({ name = "", pageSize = 20, currentPage = 1 }) => {
-  const pool = getPool();
-  const offset = (currentPage - 1) * pageSize;
-
-  const [countResult, dataResult] = await Promise.all([
-    pool.query(
-      `SELECT count(1)::INTEGER AS total_count
-       FROM dbo.items
-       WHERE ($1 = '' OR name ILIKE '%' || $1 || '%')`,
-      [name],
-    ),
-    pool.query(
-      `SELECT *
-       FROM dbo.items
-       WHERE ($1 = '' OR name ILIKE '%' || $1 || '%')
-       ORDER BY created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [name, pageSize, offset],
-    ),
-  ]);
-
-  const totalCount = countResult.rows[0].total_count;
-  const totalPage = Math.ceil(totalCount / pageSize);
-
-  return {
-    summary: {
-      current_page: currentPage,
-      total_count: totalCount,
-      has_more: currentPage < totalPage,
-      page_size: pageSize,
-      total_page: totalPage,
-    },
-    data: dataResult.rows,
-  };
-};
-
-// PostgreSQL RETURNING avoids a second lookup query.
-const createItem = async ({ name, createdBy = null }) => {
-  const pool = getPool();
-  const result = await pool.query(
-    `INSERT INTO dbo.items (name, created_by)
-     VALUES ($1, $2)
-     RETURNING id, name, created_at, created_by`,
-    [name, createdBy],
-  );
-  return result.rows[0];
-};
-```
-
-### 3.9 Validation (`src/validation/*.validation.js`)
-
-```js
-const Joi = require("joi");
-
-const getItemsSchema = Joi.object({
-  name: Joi.string().trim().max(100).allow("").default(""),
-  page_size: Joi.number().integer().min(1).max(100).default(20),
-  current_page: Joi.number().integer().min(1).default(1),
-});
-
-const updateItemSchema = Joi.object({
-  id: Joi.number().integer().positive().required(),
-  name: Joi.string().trim().min(2).max(100),
-}).or("name"); // at least one updatable field required
-```
-
-### 3.10 Response Helper (`src/helper/response.helper.js`)
-
-```js
-// 200 — single object
-response.success(res, data, "Message");
-
-// 200 — paginated list
-response.paginatedList(res, { summary, data });
-// Sends: { current_page, total_count, has_more, page_size, total_page, data[] }
-
-// Error
-response.error(res, "Message", 404);
-```
-
-### 3.11 AppError & Global Handler
-
-```js
-// Throw anywhere in service or DA layer:
-throw new AppError("Email already registered", 409);
-
-// AppError is caught by errorHandler middleware → JSON response automatically
-// No try/catch needed in controllers beyond calling next(error)
-```
+Reusable UI: `apps/web/src/components/ui.tsx`, `apps/web/src/components/ProtectedLayout.tsx`.
 
 ---
 
@@ -761,381 +449,7 @@ const handleSubmit = async (event) => {
 
 ---
 
-## 5. Frontend — React + Vite (or CRA)
-
-> **UI Library options (choose one or mix both):**
->
-> - **Material UI** (`@mui/material`) — default in this project
-> - **Ant Design** (`antd`) — drop-in alternative; wrap app in `<ConfigProvider theme={...}>`
-
-### 4.1 Packages
-
-```json
-{
-  "dependencies": {
-    "react": "^19.x",
-    "react-dom": "^19.x",
-    "react-router-dom": "^7.x",
-    "axios": "^1.x",
-    "@reduxjs/toolkit": "^2.x",
-    "react-redux": "^9.x",
-    "@mui/material": "^5.x",
-    "@mui/icons-material": "^5.x",
-    "@mui/x-date-pickers": "^6.x",
-    "@emotion/react": "^11.x",
-    "@emotion/styled": "^11.x",
-    "dayjs": "^1.x"
-  }
-}
-```
-
-### 4.2 Axios Instance (`src/api/axios.js`)
-
-Single configured instance — every feature service imports this, never raw `axios`.
-
-```js
-import axios from "axios";
-
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
-});
-
-// Auto-attach JWT on every request
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
-export default api;
-```
-
-### 4.3 Feature Folder Structure
-
-One folder per domain under `src/features/<domain>/`:
-
-```
-features/users/
-├── userSlice.js       ← Redux slice + createAsyncThunk actions
-├── userService.js     ← Axios calls via the shared api instance
-├── userSelectors.js   ← State selectors (memoised via useAppSelector)
-└── user.types.js      ← JSDoc @typedef contracts (no runtime cost)
-```
-
-#### `userService.js` — Axios calls
-
-```js
-import api from "../../api/axios";
-
-export const getUsers = (payload) =>
-  api.post("/users/get", payload).then((r) => r.data);
-export const createUser = (payload) =>
-  api.post("/auth/register", payload).then((r) => r.data);
-export const updateUser = (payload) =>
-  api.post("/users/update", payload).then((r) => r.data);
-```
-
-#### `userSlice.js` — Redux Toolkit slice
-
-```js
-import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import * as userService from "./userService";
-
-const initialPagination = {
-  current_page: 1,
-  total_count: 0,
-  has_more: false,
-  page_size: 10,
-  total_page: 0,
-};
-
-const initialState = {
-  list: [],
-  pagination: initialPagination,
-  filters: { name: "", email: "" },
-  listLoading: false,
-  listError: null,
-  submitLoading: false,
-  submitError: null,
-};
-
-const getErrorMessage = (error) =>
-  error.response?.data?.message || error.message || "Something went wrong";
-
-// Thunks read current state so callers only pass overrides
-export const fetchUsers = createAsyncThunk(
-  "users/fetchUsers",
-  async (query = {}, { getState, rejectWithValue }) => {
-    try {
-      const { users } = getState();
-      return await userService.getUsers({
-        name: query.name ?? users.filters.name,
-        email: query.email ?? users.filters.email,
-        page_size: query.page_size ?? users.pagination.page_size,
-        current_page: query.current_page ?? users.pagination.current_page,
-      });
-    } catch (error) {
-      return rejectWithValue(getErrorMessage(error));
-    }
-  },
-);
-
-const userSlice = createSlice({
-  name: "users",
-  initialState,
-  reducers: {
-    setFilters(state, action) {
-      state.filters = action.payload;
-      state.pagination.current_page = 1;
-    },
-    setPage(state, action) {
-      state.pagination.current_page = action.payload;
-    },
-    setPageSize(state, action) {
-      state.pagination.page_size = action.payload;
-      state.pagination.current_page = 1;
-    },
-    clearSubmitError(state) {
-      state.submitError = null;
-    },
-    clearListError(state) {
-      state.listError = null;
-    },
-  },
-  extraReducers: (builder) => {
-    builder
-      .addCase(fetchUsers.pending, (state) => {
-        state.listLoading = true;
-        state.listError = null;
-      })
-      .addCase(fetchUsers.fulfilled, (state, action) => {
-        state.listLoading = false;
-        state.list = action.payload.data ?? [];
-        state.pagination = {
-          current_page: action.payload.current_page,
-          total_count: action.payload.total_count,
-          has_more: action.payload.has_more,
-          page_size: action.payload.page_size,
-          total_page: action.payload.total_page,
-        };
-      })
-      .addCase(fetchUsers.rejected, (state, action) => {
-        state.listLoading = false;
-        state.listError = action.payload;
-      });
-  },
-});
-
-export const {
-  setFilters,
-  setPage,
-  setPageSize,
-  clearSubmitError,
-  clearListError,
-} = userSlice.actions;
-export default userSlice.reducer;
-```
-
-#### `userSelectors.js`
-
-```js
-export const selectUserList = (state) => state.users.list;
-export const selectUserPagination = (state) => state.users.pagination;
-export const selectUserFilters = (state) => state.users.filters;
-export const selectUsersLoading = (state) => state.users.listLoading;
-export const selectUsersError = (state) => state.users.listError;
-export const selectUsersSubmitLoading = (state) => state.users.submitLoading;
-export const selectUsersSubmitError = (state) => state.users.submitError;
-```
-
-#### `user.types.js` — JSDoc contracts (no runtime cost)
-
-```js
-/**
- * @typedef {Object} GetUsersRequest
- * @property {string}  [name]
- * @property {string}  [email]
- * @property {number}  [page_size]
- * @property {number}  [current_page]
- */
-
-/**
- * @typedef {Object} UserListItem
- * @property {number}      sr_no
- * @property {number}      id
- * @property {string}      name
- * @property {string}      email
- * @property {number|null} insert_by
- * @property {string}      insert_by_val
- * @property {string|null} insert_datetime
- * @property {number|null} update_by
- * @property {string}      update_by_val
- * @property {string|null} update_datetime
- */
-
-/**
- * @typedef {Object} GetUsersResponse
- * @property {number}         current_page
- * @property {number}         total_count
- * @property {boolean}        has_more
- * @property {number}         page_size
- * @property {number}         total_page
- * @property {UserListItem[]} data
- */
-
-export {};
-```
-
-### 4.4 Redux Store (`src/store/`)
-
-```js
-// store/index.js
-import { configureStore } from "@reduxjs/toolkit";
-import userReducer from "../features/users/userSlice";
-import userGroupReducer from "../features/userGroups/userGroupSlice";
-
-export default configureStore({
-  reducer: {
-    users: userReducer,
-    userGroups: userGroupReducer,
-  },
-});
-
-// store/hooks.js  — typed wrappers
-export const useAppDispatch = useDispatch;
-export const useAppSelector = useSelector;
-```
-
-### 4.5 Page Component Pattern
-
-Every list page follows this consistent render order:
-
-```
-1. useAppSelector(selectors)      — read state slices
-2. useAppDispatch()               — get dispatch
-3. useEffect → dispatch(fetch…)   — load data on mount
-4. Event handlers
-   - handleSearch / handleFilter
-   - handleOpenCreate / handleOpenEdit
-   - handleCloseForm
-   - validateForm (client-side)
-   - handleSave  (dispatch create or update thunk)
-   - handlePageChange / handleRowsPerPageChange
-5. JSX render:
-   ┌── Header row (title  |  filter inputs  |  action buttons)
-   ├── <Alert> on listError
-   ├── Loading skeleton / Empty state / <Grid> card list or table
-   ├── <TablePagination> or Ant <Pagination>
-   └── <CustomDialog> for create / edit form
-        ├── <Alert> on submitError
-        └── <Stack> of <FormTextField> / <AllDropdown> / etc.
-```
-
-### 4.6 Routing
-
-```jsx
-// routes/AppRoutes.jsx
-<Routes>
-  <Route path="/login" element={<Login />} />
-  <Route element={<ProtectedRoute />}>
-    <Route element={<MainLayout />}>
-      <Route path="/" element={<Dashboard />} />
-      <Route path="/users" element={<UserList />} />
-      <Route path="/user-groups" element={<UserGroupList />} />
-    </Route>
-  </Route>
-</Routes>
-```
-
----
-
-## 6. Custom Component Library
-
-All components are exported from a single barrel: **`src/components/index.js`**
-
-```js
-export { default as CustomButton } from "./common/CustomButton";
-export { default as PageHeader } from "./common/PageHeader";
-export { default as CustomDialog } from "./dialog/CustomDialog";
-export { default as CardList } from "./list/CardList";
-export { default as TextField } from "./form/TextField";
-export { default as AllDropdown, ALL_VALUE } from "./form/AllDropdown";
-export { default as AutoDropdown } from "./form/AutoDropdown";
-export { default as DatePickerField } from "./form/DatePickerField";
-export { default as TimePickerField } from "./form/TimePickerField";
-export { default as DateTimePickerField } from "./form/DateTimePickerField";
-export { default as DateMonthYearPicker } from "./form/DateMonthYearPicker";
-```
-
-### `CustomButton`
-
-| Prop                    | Type   | Default | Description                                                      |
-| ----------------------- | ------ | ------- | ---------------------------------------------------------------- |
-| `buttonType`            | string | —       | Preset: `primary` `secondary` `outline` `cancel` `save` `delete` |
-| `label`                 | string | —       | Button text (or use `children`)                                  |
-| `loading`               | bool   | `false` | Shows spinner, disables button                                   |
-| `disabled`              | bool   | `false` | —                                                                |
-| `fullWidth`             | bool   | `false` | —                                                                |
-| `show`                  | bool   | `true`  | Renders `null` when `false`                                      |
-| `startIcon` / `endIcon` | node   | —       | Hidden during loading                                            |
-
-**`buttonType` presets:**
-
-| Type        | MUI `variant` | MUI `color` |
-| ----------- | ------------- | ----------- |
-| `primary`   | `contained`   | `primary`   |
-| `secondary` | `contained`   | `secondary` |
-| `outline`   | `outlined`    | `primary`   |
-| `cancel`    | `outlined`    | `inherit`   |
-| `text`      | `text`        | `primary`   |
-| `save`      | `contained`   | `primary`   |
-| `delete`    | `contained`   | `error`     |
-
-### `CustomDialog`
-
-| Prop                   | Type   | Default | Description                      |
-| ---------------------- | ------ | ------- | -------------------------------- |
-| `open`                 | bool   | —       | Controls visibility              |
-| `onClose`              | func   | —       | Called on close / backdrop click |
-| `title`                | string | —       | Dialog title                     |
-| `subtitle`             | string | —       | Secondary description text       |
-| `children`             | node   | —       | Form content                     |
-| `actions`              | object | `{}`    | Action button config (see below) |
-| `maxWidth`             | string | `'sm'`  | MUI Dialog maxWidth              |
-| `disableBackdropClick` | bool   | `false` | Prevent close on backdrop click  |
-
-**`actions` config pattern:**
-
-```js
-actions={{
-  cancel: { show: true, onClick: handleClose, disabled: loading },
-  save:   { show: true, onClick: handleSave,  loading: loading,  label: 'Save' },
-  delete: { show: isEdit, onClick: handleDelete },
-}}
-// Supported keys: cancel | confirm | save | delete
-```
-
-### Form Components
-
-| Component             | Key Props                                                                      | Description                          |
-| --------------------- | ------------------------------------------------------------------------------ | ------------------------------------ |
-| `TextField`           | `label`, `value`, `onChange(value)`, `type`, `required`, `error`, `helperText` | Controlled text/email/password input |
-| `AllDropdown`         | `label`, `value`, `onChange`, `options`, `ALL_VALUE`                           | Dropdown with an "All" first option  |
-| `AutoDropdown`        | `label`, `value`, `onChange`, `options`                                        | Searchable autocomplete dropdown     |
-| `DatePickerField`     | `label`, `value`, `onChange`                                                   | MUI X date picker wrapper            |
-| `TimePickerField`     | `label`, `value`, `onChange`                                                   | MUI X time picker wrapper            |
-| `DateTimePickerField` | `label`, `value`, `onChange`                                                   | MUI X datetime picker wrapper        |
-| `DateMonthYearPicker` | `label`, `value`, `onChange`                                                   | Month + year selection only          |
-
-> All form components call `onChange(value)` — not `onChange(event)` — for consistency.
-
-### `CardList`
-
-Reusable grid of cards with built-in loading skeleton and empty-state rendering.
-
----
-
-## 7. Environment Variables
+## 5. Environment Variables
 
 ### Backend (`.env` / `.env.example`)
 
@@ -1169,7 +483,7 @@ VITE_API_URL=http://localhost:5000/api
 
 ---
 
-## 8. Naming Conventions
+## 6. Naming Conventions
 
 | Layer                  | Convention                                       | Example                                                    |
 | ---------------------- | ------------------------------------------------ | ---------------------------------------------------------- |
@@ -1187,7 +501,7 @@ VITE_API_URL=http://localhost:5000/api
 
 ---
 
-## 9. Response Contracts
+## 7. Response Contracts
 
 ### Success — single object
 
@@ -1227,7 +541,7 @@ VITE_API_URL=http://localhost:5000/api
 
 ---
 
-## 10. Quick Checklist for a New Domain
+## 8. Quick Checklist for a New Domain
 
 ### Backend
 
@@ -1253,7 +567,7 @@ VITE_API_URL=http://localhost:5000/api
 
 ---
 
-## 11. PostgreSQL Interview Guide
+## 9. PostgreSQL Interview Guide
 
 ### What is PostgreSQL?
 

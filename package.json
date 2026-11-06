@@ -28,9 +28,7 @@
     "lint": "npm run typecheck",
     "compose:up": "docker compose -f infra/docker-compose.yml up --build",
     "compose:down": "docker compose -f infra/docker-compose.yml down",
-    "compose:reset": "docker compose -f infra/docker-compose.yml down --volumes",
-    "legacy:backend": "npm start --prefix backend",
-    "legacy:frontend": "npm start --prefix frontend"
+    "compose:reset": "docker compose -f infra/docker-compose.yml down --volumes"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
