@@ -5,6 +5,7 @@ import authReducer from './features/authSlice';
 import bookingsReducer from './features/bookingsSlice';
 import catalogReducer from './features/catalogSlice';
 import identityReducer from './features/identitySlice';
+import menusReducer from './features/menusSlice';
 import paymentsReducer from './features/paymentsSlice';
 
 export function makeStore() {
@@ -12,6 +13,7 @@ export function makeStore() {
     reducer: {
       auth: authReducer,
       identity: identityReducer,
+      menus: menusReducer,
       catalog: catalogReducer,
       bookings: bookingsReducer,
       payments: paymentsReducer,

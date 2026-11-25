@@ -25,27 +25,30 @@ async function relayOutbox() {
 }
 
 async function connectDependencies() {
-  try {
-    await kafka.connectProducer();
-    await kafka.consume(
-      ['arcade.booking.created.v1', 'arcade.payment.completed.v1', 'arcade.payment.failed.v1'],
-      (event) => handleEvent(db, event, env.RESERVATION_HOLD_SECONDS),
-    );
-    dependencyReady = true;
-    relayTimer = setInterval(() => void relayOutbox().catch((error) => log('error', 'outbox.relay.failed', {
-      service: 'inventory',
-      error: error instanceof Error ? error.message : String(error),
-    })), 1_000);
-    expireTimer = setInterval(() => void expireUnpaidHolds(db).catch((error) => log('error', 'inventory.hold.expire.failed', {
-      service: 'inventory',
-      error: error instanceof Error ? error.message : String(error),
-    })), 5_000);
-  } catch (error) {
-    dependencyReady = false;
-    log('error', 'dependency.startup.failed', {
-      service: 'inventory',
-      error: error instanceof Error ? error.message : String(error),
-    });
+  while (acceptingTraffic && !dependencyReady) {
+    try {
+      await kafka.connectProducer();
+      await kafka.consume(
+        ['arcade.booking.created.v1', 'arcade.payment.completed.v1', 'arcade.payment.failed.v1'],
+        (event) => handleEvent(db, event, env.RESERVATION_HOLD_SECONDS),
+      );
+      dependencyReady = true;
+      relayTimer = setInterval(() => void relayOutbox().catch((error) => log('error', 'outbox.relay.failed', {
+        service: 'inventory',
+        error: error instanceof Error ? error.message : String(error),
+      })), 1_000);
+      expireTimer = setInterval(() => void expireUnpaidHolds(db).catch((error) => log('error', 'inventory.hold.expire.failed', {
+        service: 'inventory',
+        error: error instanceof Error ? error.message : String(error),
+      })), 5_000);
+    } catch (error) {
+      dependencyReady = false;
+      log('error', 'dependency.startup.failed', {
+        service: 'inventory',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
   }
 }
 

@@ -1,10 +1,17 @@
 import { Router } from 'express';
-import { gameSchema, machineQuoteSchema, machineSchema, pricingSchema } from '@arcade/contracts';
+import { gameSchema, machineQuoteSchema, machineSchema, pricingSchema, updateMachineSchema } from '@arcade/contracts';
 import { requireAuth, requireAnyRole } from '@arcade/service-auth';
 import { Postgres } from '../adapters/postgres';
 import { RedisAdapter } from '../adapters/redis';
+import { partyRoutes } from './parties';
 
-const machinesCacheKey = 'catalog:machines:v1';
+const machinesCacheKey = 'catalog:machines:v2';
+const machineListSql = `SELECT m.id, m.name, m.status,
+       p.price_per_hour_cents AS "pricePerHourCents",
+       NULLIF(trim(p.currency), '') AS currency
+     FROM machines m
+     LEFT JOIN pricing p ON p.machine_id = m.id
+     ORDER BY m.name`;
 
 export function catalogRoutes(db: Postgres, redis: RedisAdapter): Router {
   const router = Router();
@@ -17,7 +24,7 @@ export function catalogRoutes(db: Postgres, redis: RedisAdapter): Router {
         await redis.delete(machinesCacheKey);
       }
     }
-    const rows = (await db.query('SELECT * FROM machines ORDER BY name')).rows;
+    const rows = (await db.query(machineListSql)).rows;
     await redis.set(machinesCacheKey, JSON.stringify(rows), 60);
     return res.json({ success: true, data: rows, cache: redis.isReady() ? 'miss' : 'bypass' });
   });
@@ -57,6 +64,45 @@ export function catalogRoutes(db: Postgres, redis: RedisAdapter): Router {
     });
     return res.json({ success: true, data: quote });
   });
+  router.patch('/machines/:machineId', requireAnyRole('ADMIN', 'STAFF'), async (req, res) => {
+    const input = updateMachineSchema.parse(req.body);
+    const sets: string[] = [];
+    const values: unknown[] = [];
+    if (input.name !== undefined) {
+      values.push(input.name);
+      sets.push(`name = $${values.length}`);
+    }
+    if (input.status !== undefined) {
+      values.push(input.status);
+      sets.push(`status = $${values.length}`);
+    }
+    values.push(req.params.machineId);
+    const updated = await db.query(
+      `UPDATE machines SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING id, name, status`,
+      values,
+    );
+    const row = updated.rows[0];
+    if (!row) {
+      return res.status(404).json({ success: false, message: 'Machine was not found', code: 'MACHINE_NOT_FOUND' });
+    }
+    await redis.delete(machinesCacheKey);
+    return res.json({ success: true, data: row });
+  });
+  router.delete('/machines/:machineId', requireAnyRole('ADMIN', 'STAFF'), async (req, res) => {
+    const removed = await db.transaction(async (client) => {
+      const existing = await client.query('SELECT id FROM machines WHERE id = $1', [req.params.machineId]);
+      if (!existing.rowCount) return false;
+      await client.query('DELETE FROM games WHERE machine_id = $1', [req.params.machineId]);
+      await client.query('DELETE FROM pricing WHERE machine_id = $1', [req.params.machineId]);
+      await client.query('DELETE FROM machines WHERE id = $1', [req.params.machineId]);
+      return true;
+    });
+    if (!removed) {
+      return res.status(404).json({ success: false, message: 'Machine was not found', code: 'MACHINE_NOT_FOUND' });
+    }
+    await redis.delete(machinesCacheKey);
+    return res.status(204).send();
+  });
   router.post('/machines', requireAnyRole('ADMIN', 'STAFF'), async (req, res) => {
     const input = machineSchema.omit({ id: true }).parse(req.body);
     const row = (await db.query('INSERT INTO machines(name,status) VALUES($1,$2) RETURNING *', [input.name, input.status])).rows[0];
@@ -83,8 +129,10 @@ export function catalogRoutes(db: Postgres, redis: RedisAdapter): Router {
       'INSERT INTO pricing(machine_id,price_per_hour_cents,currency) VALUES($1,$2,$3) ON CONFLICT(machine_id) DO UPDATE SET price_per_hour_cents=$2,currency=$3 RETURNING *',
       [input.machineId, input.pricePerHourCents, input.currency],
     )).rows[0];
+    await redis.delete(machinesCacheKey);
     res.json({ success: true, data: row });
   });
+  router.use(partyRoutes(db));
   return router;
 }
 

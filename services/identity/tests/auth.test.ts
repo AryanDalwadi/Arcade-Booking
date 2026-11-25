@@ -40,6 +40,9 @@ function userRow(passwordHash: string) {
     display_name: 'Test Player',
     password_hash: passwordHash,
     roles: ['CUSTOMER'],
+    active: true,
+    group_id: '30000000-0000-4000-8000-000000000001',
+    group_name: 'CUSTOMER',
     created_at: new Date('2026-01-01T00:00:00.000Z'),
   };
 }
@@ -143,7 +146,13 @@ describe('identity authorization', () => {
 
   it('allows ADMIN to create custom groups but not reserved system groups', async () => {
     const query = vi.fn(async () => ({
-      rows: [{ id: '20000000-0000-4000-8000-000000000001', name: 'Tournament Team' }],
+      rows: [{
+        id: '20000000-0000-4000-8000-000000000001',
+        name: 'Tournament Team',
+        system_admin: false,
+        active: true,
+        members: [],
+      }],
       rowCount: 1,
     }));
     const origin = await serve(query);
@@ -214,5 +223,104 @@ describe('identity authorization', () => {
     );
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ code: 'LAST_ADMIN_REQUIRED' });
+  });
+
+  it('allows renaming a system role group', async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('SELECT name, system_admin, active FROM user_groups')) {
+        return { rows: [{ name: 'CUSTOMER', system_admin: false, active: true }], rowCount: 1 };
+      }
+      if (sql.includes('SELECT id FROM user_groups WHERE upper(name)')) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes('UPDATE user_groups')) {
+        return {
+          rows: [{
+            id: '20000000-0000-4000-8000-000000000001',
+            name: 'Players',
+            system_admin: false,
+            active: true,
+            members: [],
+          }],
+          rowCount: 1,
+        };
+      }
+      if (sql.includes('FROM user_group_members WHERE group_id')) {
+        return { rows: [{ members: [] }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    const origin = await serve(query);
+    const response = await fetch(`${origin}/v1/user-groups/20000000-0000-4000-8000-000000000001`, {
+      method: 'PATCH',
+      headers: {
+        'content-type': 'application/json',
+        'x-auth-subject': '10000000-0000-4000-8000-000000000001',
+        'x-auth-roles': 'ADMIN',
+      },
+      body: JSON.stringify({ name: 'Players', active: true }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ data: { name: 'Players' } });
+  });
+
+  it('allows updating flags on a reserved system group without changing its name', async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('SELECT name, system_admin, active FROM user_groups')) {
+        return { rows: [{ name: 'ADMIN', system_admin: true, active: true }], rowCount: 1 };
+      }
+      if (sql.includes('UPDATE user_groups')) {
+        return {
+          rows: [{
+            id: '20000000-0000-4000-8000-000000000001',
+            name: 'ADMIN',
+            system_admin: false,
+            active: false,
+            members: [],
+          }],
+          rowCount: 1,
+        };
+      }
+      if (sql.includes('FROM user_group_members WHERE group_id')) {
+        return { rows: [{ members: [] }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    const origin = await serve(query);
+    const response = await fetch(`${origin}/v1/user-groups/20000000-0000-4000-8000-000000000001`, {
+      method: 'PATCH',
+      headers: {
+        'content-type': 'application/json',
+        'x-auth-subject': '10000000-0000-4000-8000-000000000001',
+        'x-auth-roles': 'ADMIN',
+      },
+      body: JSON.stringify({ name: 'ADMIN', systemAdmin: false, active: false }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      data: { name: 'ADMIN', systemAdmin: false, active: false },
+    });
+  });
+
+  it('blocks deleting a user group that still has members', async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('SELECT name FROM user_groups')) {
+        return { rows: [{ name: 'Tournament Team' }], rowCount: 1 };
+      }
+      if (sql.includes('SELECT count(*)')) {
+        return { rows: [{ count: '2' }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    const origin = await serve(query);
+    const response = await fetch(`${origin}/v1/user-groups/20000000-0000-4000-8000-000000000001`, {
+      method: 'DELETE',
+      headers: {
+        'x-auth-subject': '10000000-0000-4000-8000-000000000001',
+        'x-auth-roles': 'ADMIN',
+      },
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'GROUP_HAS_MEMBERS' });
   });
 });

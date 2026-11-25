@@ -69,8 +69,8 @@ async function writePaymentEvent(client: PoolClient, row: PaymentRow, status: 'C
     payload: {
       id: row.id,
       bookingId: row.booking_id,
-      amountCents: row.amount_cents,
-      currency: row.currency,
+      amountCents: Number(row.amount_cents),
+      currency: row.currency.trim(),
       status,
       ...(row.customer_email ? { customerEmail: row.customer_email } : {}),
     },
@@ -83,6 +83,12 @@ async function writePaymentEvent(client: PoolClient, row: PaymentRow, status: 'C
     event.eventType,
     event,
   ]);
+}
+
+export async function republishCompletedPayment(db: Postgres, row: PaymentRow): Promise<void> {
+  await db.transaction(async (client) => {
+    await writePaymentEvent(client, row, 'COMPLETED');
+  });
 }
 
 export async function finalizePayment(
@@ -247,6 +253,17 @@ export function paymentRoutes(db: Postgres, options: PaymentRouteOptions): Route
     const staff = auth.roles.has('ADMIN') || auth.roles.has('STAFF');
     if (!staff && payment.user_id !== auth.subject) {
       return res.status(403).json({ success: false, message: 'You can only pay for your own booking', code: 'PAYMENT_FORBIDDEN' });
+    }
+    if (payment.status === 'COMPLETED') {
+      await republishCompletedPayment(db, payment);
+      return res.json({
+        success: true,
+        data: checkoutPayload(payment, options, {
+          orderId: payment.razorpay_order_id || payment.provider_reference || payment.id,
+          provider: payment.provider,
+          alreadyPaid: true,
+        }),
+      });
     }
     if (payment.status !== 'PENDING') {
       return res.status(409).json({

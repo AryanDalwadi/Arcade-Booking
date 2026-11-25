@@ -28,30 +28,33 @@ async function relayOutbox() {
 }
 
 async function connectDependencies() {
-  try {
-    await kafka.connectProducer();
-    await kafka.consume(
-      [
-        'arcade.payment.completed.v1',
-        'arcade.payment.failed.v1',
-        'arcade.inventory.reserved.v1',
-        'arcade.inventory.rejected.v1',
-        'arcade.inventory.released.v1',
-      ],
-      (event) => handleBookingEvent(db, event),
-    );
-    await redis.connect();
-    dependencyReady = true;
-    relayTimer = setInterval(() => void relayOutbox().catch((error) => log('error', 'outbox.relay.failed', {
-      service: 'booking',
-      error: error instanceof Error ? error.message : String(error),
-    })), 1_000);
-  } catch (error) {
-    dependencyReady = false;
-    log('error', 'dependency.startup.failed', {
-      service: 'booking',
-      error: error instanceof Error ? error.message : String(error),
-    });
+  while (acceptingTraffic && !dependencyReady) {
+    try {
+      await kafka.connectProducer();
+      await kafka.consume(
+        [
+          'arcade.payment.completed.v1',
+          'arcade.payment.failed.v1',
+          'arcade.inventory.reserved.v1',
+          'arcade.inventory.rejected.v1',
+          'arcade.inventory.released.v1',
+        ],
+        (event) => handleBookingEvent(db, event),
+      );
+      await redis.connect();
+      dependencyReady = true;
+      relayTimer = setInterval(() => void relayOutbox().catch((error) => log('error', 'outbox.relay.failed', {
+        service: 'booking',
+        error: error instanceof Error ? error.message : String(error),
+      })), 1_000);
+    } catch (error) {
+      dependencyReady = false;
+      log('error', 'dependency.startup.failed', {
+        service: 'booking',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
   }
 }
 
