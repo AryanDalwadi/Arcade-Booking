@@ -1,5 +1,5 @@
 import type { Machine } from '@arcade/contracts';
-import type { ReactNode } from 'react';
+import { useId, type ReactNode, type SelectHTMLAttributes } from 'react';
 
 export function cx(...parts: Array<string | false | undefined>) {
   return parts.filter(Boolean).join(' ');
@@ -7,6 +7,51 @@ export function cx(...parts: Array<string | false | undefined>) {
 
 export const fieldClass = 'grid gap-2 text-xs text-mist';
 export const inputClass = 'w-full rounded border border-line bg-input px-3.5 py-3 text-sm text-white outline-none transition focus:border-mint';
+
+function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg className={cx('size-4 shrink-0', className)} viewBox="0 0 20 20" fill="none" aria-hidden>
+      <path
+        d="M5 8l5 5 5-5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Native select with a visible chevron (browser default arrow is often hidden in dark themes).
+ */
+export function Select({
+  className,
+  wrapperClassName,
+  children,
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement> & { wrapperClassName?: string }) {
+  return (
+    <div className={cx('relative min-w-0', wrapperClassName ?? 'w-full')}>
+      <select
+        className={cx(
+          inputClass,
+          'cursor-pointer appearance-none pr-10',
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </select>
+      <span
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted"
+        aria-hidden
+      >
+        <ChevronDownIcon />
+      </span>
+    </div>
+  );
+}
 export const panelClass = 'rounded-lg border border-line bg-linear-to-br from-[#1b1d32e6] to-[#0e101ee6] p-5';
 export const tableWrapClass = `${panelClass} overflow-x-auto p-0`;
 export const tableClass = 'w-full border-collapse text-left';
@@ -25,18 +70,152 @@ export function primaryButtonClass(extra?: string) {
   );
 }
 
+/** Header/toolbar primary action — never full width. */
+export function toolbarPrimaryButtonClass(extra?: string) {
+  return primaryButtonClass(cx('!w-auto shrink-0 whitespace-nowrap', extra));
+}
+
+export function secondaryButtonClass(extra?: string) {
+  return cx(
+    'rounded border border-line bg-input px-4 py-2.5 text-sm text-white transition enabled:hover:border-mint disabled:cursor-wait disabled:opacity-55',
+    extra,
+  );
+}
+
+export function dangerButtonClass(extra?: string) {
+  return cx(
+    'rounded border border-danger-strong/60 bg-danger-strong/15 px-4 py-2.5 text-sm text-danger transition enabled:hover:bg-danger-strong/25 disabled:cursor-wait disabled:opacity-55',
+    extra,
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg className="size-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M3.5 8.5 6.5 11.5 12.5 4.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function AppCheckbox({
+  checked,
+  disabled,
+  onChange,
+  id,
+  'aria-label': ariaLabel,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange?: (checked: boolean) => void;
+  id?: string;
+  'aria-label'?: string;
+}) {
+  return (
+    <button
+      id={id}
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onClick={() => {
+        if (!disabled) onChange?.(!checked);
+      }}
+      className={cx(
+        'flex size-5 shrink-0 items-center justify-center rounded border-2 transition',
+        checked
+          ? 'border-mint bg-mint text-mint-ink shadow-[0_0_0_1px_rgba(92,255,200,0.35)]'
+          : 'border-mint/60 bg-input text-transparent hover:border-mint',
+        disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer',
+      )}
+    >
+      <span className={checked ? 'opacity-100' : 'opacity-0'}>
+        <CheckIcon />
+      </span>
+    </button>
+  );
+}
+
+export function CheckboxField({
+  label,
+  checked,
+  onChange,
+  disabled,
+  hint,
+}: {
+  label: string;
+  checked: boolean;
+  onChange?: (checked: boolean) => void;
+  disabled?: boolean;
+  hint?: string;
+}) {
+  const inputId = useId();
+  return (
+    <div className="grid gap-1">
+      <div className="flex items-start gap-3">
+        <AppCheckbox
+          id={inputId}
+          checked={checked}
+          disabled={disabled}
+          onChange={onChange}
+          aria-label={label}
+        />
+        <label
+          htmlFor={inputId}
+          className={cx(
+            'cursor-pointer select-none pt-px text-sm text-white',
+            disabled && 'cursor-not-allowed opacity-50',
+          )}
+        >
+          {label}
+        </label>
+      </div>
+      {hint && <p className="m-0 pl-8 text-xs text-muted">{hint}</p>}
+    </div>
+  );
+}
+
+/** Read-only table cell — not an input (use CheckboxField in edit dialogs). */
+export function BooleanCell({
+  value,
+  trueLabel = 'Yes',
+  falseLabel = 'No',
+}: {
+  value: boolean;
+  trueLabel?: string;
+  falseLabel?: string;
+}) {
+  return (
+    <span className={value ? 'text-mint' : 'text-muted'} aria-label={value ? trueLabel : falseLabel}>
+      {value ? trueLabel : falseLabel}
+    </span>
+  );
+}
+
+export function ActiveStatusCell({ active }: { active: boolean }) {
+  return (
+    <BooleanCell value={active} trueLabel="Active" falseLabel="Inactive" />
+  );
+}
+
 export function PageTitle({ eyebrow, title, action }: {
   eyebrow: string;
   title: string;
   action?: ReactNode;
 }) {
   return (
-    <header className="mb-8 flex items-end justify-between gap-4 max-sm:items-start">
-      <div>
+    <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0 flex-1">
         <span className="font-display text-[11px] tracking-[0.22em] text-mint">{eyebrow}</span>
         <h1 className="mt-1.5 mb-0 text-[clamp(28px,4vw,44px)] uppercase tracking-[-0.03em]">{title}</h1>
       </div>
-      {action}
+      {action ? <div className="shrink-0 self-end">{action}</div> : null}
     </header>
   );
 }

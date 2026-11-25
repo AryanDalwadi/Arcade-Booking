@@ -30,6 +30,9 @@ function mockGateway() {
     if (url.endsWith('/api/identity/auth/login')) {
       return jsonResponse({ success: true, data: { token: 'jwt-token', user: sessionUser } });
     }
+    if (url.includes('/api/identity/menus/access')) {
+      return jsonResponse({ success: true, data: adminMenuAccess() });
+    }
     if (url.endsWith('/health')) return jsonResponse({ status: 'ok' });
     return jsonResponse({ success: true, data: [] });
   }));
@@ -80,8 +83,8 @@ describe('protected routing and sessions', () => {
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(admin));
     renderApp('/admin/users');
 
-    expect(await screen.findByRole('heading', { name: 'Players & staff' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /User Groups/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Users' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /User Groups/i })).toBeInTheDocument();
   });
 
   it('sends an administrator to the admin portal even if login started from a customer path', async () => {
@@ -90,6 +93,9 @@ describe('protected routing and sessions', () => {
       const url = String(input);
       if (url.endsWith('/api/identity/auth/login')) {
         return jsonResponse({ success: true, data: { token: 'admin-jwt', user: admin } });
+      }
+      if (url.includes('/api/identity/menus/access')) {
+        return jsonResponse({ success: true, data: adminMenuAccess() });
       }
       return jsonResponse({ success: true, data: [] });
     }));
@@ -107,7 +113,7 @@ describe('protected routing and sessions', () => {
     await user.click(screen.getByRole('button', { name: 'Enter arcade →' }));
 
     expect(await screen.findByRole('heading', { name: 'Arcade command center' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Users/i })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /Users/i })).toBeInTheDocument();
   });
 
   it('shows player names on admin bookings and only own rows on My Bookings', async () => {
@@ -141,9 +147,24 @@ describe('protected routing and sessions', () => {
         status: 'CONFIRMED',
         createdAt: '2026-09-22T09:05:00.000Z',
       },
+      {
+        id: '30000000-0000-4000-8000-000000000003',
+        userId: player.id,
+        machineId: '40000000-0000-4000-8000-000000000001',
+        startAt: '2026-09-22T12:00:00.000Z',
+        durationMinutes: 30,
+        amountCents: 3000,
+        currency: 'INR',
+        status: 'PENDING_PAYMENT',
+        payment_status: 'COMPLETED',
+        createdAt: '2026-09-22T09:10:00.000Z',
+      },
     ];
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes('/api/identity/menus/access')) {
+        return jsonResponse({ success: true, data: adminMenuAccess() });
+      }
       if (url.includes('/api/identity/users')) {
         return jsonResponse({ success: true, data: [player, other] });
       }
@@ -166,7 +187,7 @@ describe('protected routing and sessions', () => {
     localStorage.setItem(AUTH_TOKEN_KEY, 'admin-token');
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(admin));
     const adminView = renderApp('/admin/bookings');
-    expect(await screen.findByText('Test Player (player@example.com)')).toBeInTheDocument();
+    expect(await screen.findAllByText('Test Player (player@example.com)')).toHaveLength(2);
     expect(screen.getByText('Other Player (other@example.com)')).toBeInTheDocument();
     adminView.unmount();
 
@@ -177,6 +198,7 @@ describe('protected routing and sessions', () => {
     expect(screen.queryByText('Other Player (other@example.com)')).not.toBeInTheDocument();
     expect(screen.getAllByText('Milestone 5 Racer').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Pay now' })).toBeInTheDocument();
+    expect(screen.getByText('Payment received')).toBeInTheDocument();
   });
 });
 
@@ -185,4 +207,33 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+function adminMenuAccess() {
+  return [
+    ['/admin/dashboard', 'Admin Dashboard'],
+    ['/admin/users', 'Users'],
+    ['/admin/user-groups', 'User Groups'],
+    ['/admin/catalog', 'Catalog Management'],
+    ['/admin/bookings', 'All Bookings'],
+    ['/admin/notifications', 'Notifications'],
+    ['/admin/menus', 'Menus'],
+    ['/admin/menu-rights', 'Menu Rights'],
+  ].map(([url, label], index) => ({
+    id: `a1000000-0000-4000-8000-00000000000${index + 1}`,
+    parentId: null,
+    label,
+    icon: '•',
+    url,
+    priority: index + 1,
+    active: true,
+    expandable: false,
+    sysAdmin: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    canAll: true,
+    canAdd: true,
+    canDelete: true,
+    canEdit: true,
+    canDetails: true,
+  }));
 }

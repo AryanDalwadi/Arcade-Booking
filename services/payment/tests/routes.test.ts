@@ -132,3 +132,70 @@ describe('payment authorization', () => {
     expect(response.status).toBe(200);
   });
 });
+
+describe('checkout after Razorpay has already captured the payment', () => {
+  it('returns already paid and publishes the completion again', async () => {
+    const bookingId = '30000000-0000-4000-8000-000000000001';
+    const userId = '10000000-0000-4000-8000-000000000001';
+    const payment = {
+      id: '20000000-0000-4000-8000-000000000001',
+      booking_id: bookingId,
+      user_id: userId,
+      customer_email: 'player@example.com',
+      amount_cents: 6000,
+      currency: 'INR',
+      idempotency_key: `booking:${bookingId}`,
+      status: 'COMPLETED',
+      provider: 'RAZORPAY',
+      provider_reference: 'pay_captured',
+      razorpay_order_id: 'order_captured',
+    };
+    const outbox: unknown[] = [];
+    const db = {
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes('SELECT * FROM payments')) return { rows: [payment], rowCount: 1 };
+        return { rows: [], rowCount: 0 };
+      }),
+      transaction: vi.fn(async (work: (client: { query: ReturnType<typeof vi.fn> }) => Promise<unknown>) => {
+        const client = {
+          query: vi.fn(async (sql: string, values?: unknown[]) => {
+            if (sql.includes('INSERT INTO outbox')) outbox.push(values?.[2]);
+            return { rows: [], rowCount: 1 };
+          }),
+        };
+        return work(client);
+      }),
+    } as unknown as Postgres;
+    const app = createHttpApp({
+      dbReady: async () => true,
+      dependencyReady: () => true,
+      routes: paymentRoutes(db, {
+        gateway: { createOrder: async () => ({ orderId: 'order_should_not_be_created', keyId: 'rzp_test', provider: 'RAZORPAY' }) },
+        publicKeyId: 'rzp_test',
+      }),
+    });
+    const server = createServer(app).listen(0);
+    servers.push(server);
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const response = await fetch(`${origin}/v1/orders`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-auth-subject': userId,
+        'x-auth-roles': 'CUSTOMER',
+      },
+      body: JSON.stringify({ bookingId }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: { bookingId, orderId: 'order_captured', alreadyPaid: true, provider: 'RAZORPAY' },
+    });
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]).toMatchObject({
+      eventType: 'arcade.payment.completed.v1',
+      payload: { bookingId, status: 'COMPLETED' },
+    });
+  });
+});

@@ -72,11 +72,16 @@ export function createApp(
   app.use(verifyJwt(config));
   const staffOrAdmin = requireAnyRole('ADMIN', 'STAFF');
   const adminOnly = requireAnyRole('ADMIN');
-  app.use('/api/identity/users', staffOrAdmin);
+  app.use('/api/identity/users', (request, response, next) =>
+    request.method === 'GET'
+      ? staffOrAdmin(request, response, next)
+      : adminOnly(request, response, next));
   app.use('/api/identity/user-groups', (request, response, next) =>
     request.method === 'GET'
       ? staffOrAdmin(request, response, next)
       : adminOnly(request, response, next));
+  app.use('/api/identity/menus', staffOrAdmin);
+  app.use('/api/identity/menu-rights', staffOrAdmin);
   app.use('/api/catalog', (request, response, next) =>
     ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)
       ? staffOrAdmin(request, response, next)

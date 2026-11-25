@@ -177,6 +177,23 @@ describe('API gateway', () => {
     expect(await response.json()).toMatchObject({ code: 'ROLE_REQUIRED' });
   });
 
+  it('reserves identity user mutations for administrators', async () => {
+    const secret = 'a-test-secret-with-32-characters';
+    const origin = await serve({ JWT_SECRET: secret });
+    const staff = jwt.sign({ sub: 'staff-1', roles: ['STAFF'] }, secret);
+    const response = await fetch(`${origin}/api/identity/users`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${staff}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email: 'new@example.com',
+        password: 'ArcadePass123!',
+        displayName: 'New User',
+      }),
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: 'ROLE_REQUIRED' });
+  });
+
   it('keeps live healthy while readiness drains', async () => {
     const server = createApp(config(), undefined, () => false).listen(0);
     servers.push(server);

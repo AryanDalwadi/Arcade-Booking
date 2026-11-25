@@ -210,4 +210,73 @@ describe('booking ownership and pricing', () => {
       message: 'This machine is already booked for that time',
     });
   });
+
+  it('lets the owner edit an unpaid booking and blocks someone else', async () => {
+    const row = {
+      id: '30000000-0000-4000-8000-000000000001',
+      user_id: '10000000-0000-4000-8000-000000000001',
+      machine_id: quote().machineId,
+      start_at: '2026-10-01T10:00:00.000Z',
+      duration_minutes: 60,
+      amount_cents: 24000,
+      currency: 'INR',
+      status: 'PENDING_PAYMENT',
+      created_at: '2026-10-01T09:00:00.000Z',
+    };
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('UPDATE bookings')) {
+        return { rows: [{ ...row, duration_minutes: 90 }], rowCount: 1 };
+      }
+      return { rows: [row], rowCount: 1 };
+    });
+    const db = { query } as unknown as Postgres;
+    const origin = await serve(db, {} as RedisAdapter, { quote: vi.fn(async () => quote()) });
+    const headers = {
+      'content-type': 'application/json',
+      'x-auth-subject': '10000000-0000-4000-8000-000000000001',
+      'x-auth-roles': 'CUSTOMER',
+    };
+    const updated = await fetch(`${origin}/v1/bookings/${row.id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ durationMinutes: 90 }),
+    });
+    expect(updated.status).toBe(200);
+    const forbidden = await fetch(`${origin}/v1/bookings/${row.id}`, {
+      method: 'PATCH',
+      headers: { ...headers, 'x-auth-subject': '90000000-0000-4000-8000-000000000009' },
+      body: JSON.stringify({ durationMinutes: 90 }),
+    });
+    expect(forbidden.status).toBe(403);
+  });
+
+  it('deletes an unpaid booking and cancels a confirmed one', async () => {
+    const pending = {
+      id: '30000000-0000-4000-8000-000000000001',
+      user_id: '10000000-0000-4000-8000-000000000001',
+      status: 'PENDING_PAYMENT',
+    };
+    const confirmed = {
+      id: '30000000-0000-4000-8000-000000000002',
+      user_id: '10000000-0000-4000-8000-000000000001',
+      status: 'CONFIRMED',
+    };
+    const query = vi.fn(async (sql: string, values?: unknown[]) => {
+      const id = values?.[0];
+      const current = id === confirmed.id ? confirmed : pending;
+      if (sql.includes('UPDATE bookings')) return { rows: [{ ...current, status: 'CANCELLED' }], rowCount: 1 };
+      if (sql.startsWith('DELETE')) return { rows: [], rowCount: 1 };
+      return { rows: [current], rowCount: 1 };
+    });
+    const db = { query } as unknown as Postgres;
+    const origin = await serve(db, {} as RedisAdapter, { quote: vi.fn() });
+    const headers = {
+      'x-auth-subject': '10000000-0000-4000-8000-000000000001',
+      'x-auth-roles': 'CUSTOMER',
+    };
+    expect((await fetch(`${origin}/v1/bookings/${pending.id}`, { method: 'DELETE', headers })).status).toBe(204);
+    const cancelled = await fetch(`${origin}/v1/bookings/${confirmed.id}`, { method: 'DELETE', headers });
+    expect(cancelled.status).toBe(200);
+    expect(await cancelled.json()).toMatchObject({ data: { status: 'CANCELLED' } });
+  });
 });

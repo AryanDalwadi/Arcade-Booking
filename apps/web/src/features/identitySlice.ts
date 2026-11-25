@@ -3,18 +3,21 @@ import type { ApiSuccess, User, UserGroup } from '@arcade/contracts';
 import { api } from '../api';
 import { logout } from './authSlice';
 
+export const SYSTEM_GROUP_NAMES = ['CUSTOMER', 'STAFF', 'ADMIN'] as const;
+export function isSystemGroupName(name: string): boolean {
+  return SYSTEM_GROUP_NAMES.includes(name.toUpperCase() as typeof SYSTEM_GROUP_NAMES[number]);
+}
+
 type ResourceStatus = 'idle' | 'loading' | 'succeeded' | 'failed';
 type IdentityState = {
   users: User[];
   groups: UserGroup[];
   usersStatus: ResourceStatus;
   groupsStatus: ResourceStatus;
-  createStatus: ResourceStatus;
-  membershipStatus: ResourceStatus;
+  saveStatus: ResourceStatus;
   usersError: string | null;
   groupsError: string | null;
-  createError: string | null;
-  membershipError: string | null;
+  saveError: string | null;
 };
 
 const initialState: IdentityState = {
@@ -22,12 +25,10 @@ const initialState: IdentityState = {
   groups: [],
   usersStatus: 'idle',
   groupsStatus: 'idle',
-  createStatus: 'idle',
-  membershipStatus: 'idle',
+  saveStatus: 'idle',
   usersError: null,
   groupsError: null,
-  createError: null,
-  membershipError: null,
+  saveError: null,
 };
 
 export const fetchUsers = createAsyncThunk<User[]>('identity/fetchUsers', async () => {
@@ -40,44 +41,104 @@ export const fetchUserGroups = createAsyncThunk<UserGroup[]>('identity/fetchUser
   return response.data;
 });
 
-export const createUserGroup = createAsyncThunk<UserGroup, string>(
+export type UserGroupInput = {
+  name: string;
+  systemAdmin: boolean;
+  active: boolean;
+};
+
+export const createUserGroup = createAsyncThunk<UserGroup, UserGroupInput>(
   'identity/createUserGroup',
-  async (name) => {
-    const response = await api<ApiSuccess<Pick<UserGroup, 'id' | 'name'>>>('/api/identity/user-groups', {
+  async (input) => {
+    const response = await api<ApiSuccess<UserGroup>>('/api/identity/user-groups', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(input),
     });
-    return { ...response.data, members: [] };
+    return response.data;
   },
 );
 
-type Membership = { groupId: string; userId: string };
-export const addGroupMember = createAsyncThunk<Membership, Membership>(
-  'identity/addGroupMember',
-  async (membership) => {
-    await api<void>(
-      `/api/identity/user-groups/${membership.groupId}/users/${membership.userId}`,
-      { method: 'POST' },
-    );
-    return membership;
+export const updateUserGroup = createAsyncThunk<
+  UserGroup,
+  { groupId: string } & Partial<UserGroupInput>
+>(
+  'identity/updateUserGroup',
+  async ({ groupId, ...patch }) => {
+    const response = await api<ApiSuccess<UserGroup>>(`/api/identity/user-groups/${groupId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+    return response.data;
   },
 );
 
-export const removeGroupMember = createAsyncThunk<Membership, Membership>(
-  'identity/removeGroupMember',
-  async (membership) => {
-    await api<void>(
-      `/api/identity/user-groups/${membership.groupId}/users/${membership.userId}`,
-      { method: 'DELETE' },
-    );
-    return membership;
+export const deleteUserGroup = createAsyncThunk<string, string>(
+  'identity/deleteUserGroup',
+  async (groupId) => {
+    await api<void>(`/api/identity/user-groups/${groupId}`, { method: 'DELETE' });
+    return groupId;
+  },
+);
+
+type CreateUserInput = {
+  email: string;
+  password: string;
+  displayName: string;
+  active?: boolean;
+};
+
+export const createUser = createAsyncThunk<User, CreateUserInput>(
+  'identity/createUser',
+  async (input) => {
+    const response = await api<ApiSuccess<User>>('/api/identity/users', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    return response.data;
+  },
+);
+
+export const updateUser = createAsyncThunk<
+  User,
+  { id: string; displayName?: string; active?: boolean; password?: string }
+>(
+  'identity/updateUser',
+  async ({ id, ...patch }) => {
+    const response = await api<ApiSuccess<User>>(`/api/identity/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+    return response.data;
+  },
+);
+
+export const setUserGroup = createAsyncThunk<User, { userId: string; groupId: string }>(
+  'identity/setUserGroup',
+  async ({ userId, groupId }) => {
+    const response = await api<ApiSuccess<User>>(`/api/identity/users/${userId}/group`, {
+      method: 'PUT',
+      body: JSON.stringify({ groupId }),
+    });
+    return response.data;
+  },
+);
+
+export const deleteUser = createAsyncThunk<string, string>(
+  'identity/deleteUser',
+  async (id) => {
+    await api<void>(`/api/identity/users/${id}`, { method: 'DELETE' });
+    return id;
   },
 );
 
 const identitySlice = createSlice({
   name: 'identity',
   initialState,
-  reducers: {},
+  reducers: {
+    clearSaveError(state) {
+      state.saveError = null;
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchUsers.pending, (state) => {
@@ -104,49 +165,85 @@ const identitySlice = createSlice({
         state.groupsStatus = 'failed';
         state.groupsError = action.error.message ?? 'Could not load user groups';
       })
-      .addCase(createUserGroup.pending, (state) => {
-        state.createStatus = 'loading';
-        state.createError = null;
-      })
-      .addCase(createUserGroup.fulfilled, (state, action) => {
-        state.createStatus = 'succeeded';
-        state.groups.push(action.payload);
-      })
-      .addCase(createUserGroup.rejected, (state, action) => {
-        state.createStatus = 'failed';
-        state.createError = action.error.message ?? 'Could not create user group';
-      })
       .addMatcher(
-        (action) => action.type === addGroupMember.pending.type || action.type === removeGroupMember.pending.type,
+        (action) => [
+          createUserGroup.pending.type,
+          updateUserGroup.pending.type,
+          deleteUserGroup.pending.type,
+          createUser.pending.type,
+          updateUser.pending.type,
+          setUserGroup.pending.type,
+          deleteUser.pending.type,
+        ].includes(action.type),
         (state) => {
-          state.membershipStatus = 'loading';
-          state.membershipError = null;
+          state.saveStatus = 'loading';
+          state.saveError = null;
         },
       )
       .addMatcher(
-        (action): action is ReturnType<typeof addGroupMember.fulfilled> =>
-          action.type === addGroupMember.fulfilled.type,
+        (action): action is ReturnType<typeof createUserGroup.fulfilled> =>
+          action.type === createUserGroup.fulfilled.type,
         (state, action) => {
-          state.membershipStatus = 'succeeded';
-          const group = state.groups.find((candidate) => candidate.id === action.payload.groupId);
-          if (group && !group.members.includes(action.payload.userId)) group.members.push(action.payload.userId);
+          state.saveStatus = 'succeeded';
+          state.groups.push(action.payload);
         },
       )
       .addMatcher(
-        (action): action is ReturnType<typeof removeGroupMember.fulfilled> =>
-          action.type === removeGroupMember.fulfilled.type,
+        (action): action is ReturnType<typeof updateUserGroup.fulfilled> =>
+          action.type === updateUserGroup.fulfilled.type,
         (state, action) => {
-          state.membershipStatus = 'succeeded';
-          const group = state.groups.find((candidate) => candidate.id === action.payload.groupId);
-          if (group) group.members = group.members.filter((id) => id !== action.payload.userId);
+          state.saveStatus = 'succeeded';
+          const index = state.groups.findIndex((group) => group.id === action.payload.id);
+          if (index >= 0) state.groups[index] = action.payload;
         },
       )
       .addMatcher(
-        (action): action is ReturnType<typeof addGroupMember.rejected> | ReturnType<typeof removeGroupMember.rejected> =>
-          action.type === addGroupMember.rejected.type || action.type === removeGroupMember.rejected.type,
+        (action): action is ReturnType<typeof deleteUserGroup.fulfilled> =>
+          action.type === deleteUserGroup.fulfilled.type,
         (state, action) => {
-          state.membershipStatus = 'failed';
-          state.membershipError = action.error.message ?? 'Could not update group membership';
+          state.saveStatus = 'succeeded';
+          state.groups = state.groups.filter((group) => group.id !== action.payload);
+        },
+      )
+      .addMatcher(
+        (action): action is ReturnType<typeof createUser.fulfilled> =>
+          action.type === createUser.fulfilled.type,
+        (state, action) => {
+          state.saveStatus = 'succeeded';
+          state.users.unshift(action.payload);
+        },
+      )
+      .addMatcher(
+        (action): action is ReturnType<typeof updateUser.fulfilled> | ReturnType<typeof setUserGroup.fulfilled> =>
+          action.type === updateUser.fulfilled.type || action.type === setUserGroup.fulfilled.type,
+        (state, action) => {
+          state.saveStatus = 'succeeded';
+          const index = state.users.findIndex((user) => user.id === action.payload.id);
+          if (index >= 0) state.users[index] = action.payload;
+        },
+      )
+      .addMatcher(
+        (action): action is ReturnType<typeof deleteUser.fulfilled> =>
+          action.type === deleteUser.fulfilled.type,
+        (state, action) => {
+          state.saveStatus = 'succeeded';
+          state.users = state.users.filter((user) => user.id !== action.payload);
+        },
+      )
+      .addMatcher(
+        (action): action is { type: string; error: { message?: string } } =>
+          [
+            createUserGroup.rejected.type,
+            updateUserGroup.rejected.type,
+            deleteUserGroup.rejected.type,
+            createUser.rejected.type,
+            updateUser.rejected.type,
+            setUserGroup.rejected.type,
+            deleteUser.rejected.type,
+          ].includes(action.type),
+        (state, action) => {
+          state.saveStatus = 'failed';
+          state.saveError = action.error.message ?? 'Request failed';
         },
       )
       .addMatcher(
@@ -156,4 +253,5 @@ const identitySlice = createSlice({
   },
 });
 
+export const { clearSaveError } = identitySlice.actions;
 export default identitySlice.reducer;

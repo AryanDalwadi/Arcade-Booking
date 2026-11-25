@@ -79,6 +79,26 @@ export const confirmRazorpayCheckout = createAsyncThunk<void, { bookingId: strin
   },
 );
 
+export const syncPaidBooking = createAsyncThunk<{ bookingId: string; alreadyPaid: boolean }, string>(
+  'payments/syncPaidBooking',
+  async (bookingId) => {
+    try {
+      const payment = await api<ApiSuccess<{ status?: string }>>(`/api/payment/payments/by-booking/${bookingId}`);
+      if (payment.data?.status !== 'COMPLETED') return { bookingId, alreadyPaid: false };
+    } catch (error) {
+      if (error instanceof ApiError && (error.status === 404 || error.status === 403)) {
+        return { bookingId, alreadyPaid: false };
+      }
+      throw error;
+    }
+    const order = await api<ApiSuccess<CheckoutOrder>>('/api/payment/orders', {
+      method: 'POST',
+      body: JSON.stringify({ bookingId }),
+    });
+    return { bookingId, alreadyPaid: Boolean(order.data.alreadyPaid) };
+  },
+);
+
 export const fetchDeliveries = createAsyncThunk<NotificationDelivery[]>(
   'payments/fetchDeliveries',
   async () => {

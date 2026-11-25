@@ -3,6 +3,7 @@ import { Router } from 'express';
 import {
   bookingCreatedEventSchema,
   createBookingSchema,
+  updateBookingSchema,
   eventTypes,
   inventoryRejectedEventSchema,
   inventoryReleasedEventSchema,
@@ -77,8 +78,12 @@ export function bookingRoutes(
   const router = Router();
   router.post('/bookings', requireAuth, async (req, res) => {
     const auth = readAuthContext(req)!;
-    const userId = auth.subject;
     const input = createBookingSchema.parse(req.body);
+    const requestedUserId = typeof req.body?.userId === 'string' ? req.body.userId : '';
+    const staff = auth.roles.has('ADMIN') || auth.roles.has('STAFF');
+    const userId = staff && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedUserId)
+      ? requestedUserId
+      : auth.subject;
     const customerEmail = auth.email ?? input.customerEmail;
     let quote;
     try {
@@ -146,6 +151,82 @@ export function bookingRoutes(
       await redis.delete(holdKeys);
     }
   });
+  router.patch('/bookings/:id', requireAuth, async (req, res) => {
+    const auth = readAuthContext(req)!;
+    const input = updateBookingSchema.parse(req.body);
+    const found = await db.query('SELECT * FROM bookings WHERE id=$1', [req.params.id]);
+    const row = found.rows[0];
+    if (!row) {
+      return res.status(404).json({ success: false, message: 'Booking not found', code: 'BOOKING_NOT_FOUND' });
+    }
+    if (!canManageBooking(auth.roles, auth.subject, row.user_id)) {
+      return res.status(403).json({ success: false, message: 'You can only change your own booking', code: 'BOOKING_FORBIDDEN' });
+    }
+    if (!editableStatus(row.status)) {
+      return res.status(409).json({
+        success: false,
+        message: 'Only unpaid bookings can be edited',
+        code: 'BOOKING_LOCKED',
+      });
+    }
+    const machineId = input.machineId ?? row.machine_id;
+    const startAt = input.startAt ?? new Date(row.start_at).toISOString();
+    const durationMinutes = input.durationMinutes ?? Number(row.duration_minutes);
+    let quote;
+    try {
+      quote = await quotes.quote(machineId, durationMinutes);
+    } catch {
+      return res.status(422).json({
+        success: false,
+        message: 'The selected machine cannot be priced for this booking',
+        code: 'BOOKING_QUOTE_UNAVAILABLE',
+      });
+    }
+    let available: boolean;
+    try {
+      available = await inventory.available(machineId, startAt, durationMinutes);
+    } catch {
+      return res.status(503).json({
+        success: false,
+        message: 'Could not confirm machine availability',
+        code: 'BOOKING_SLOT_CHECK_UNAVAILABLE',
+      });
+    }
+    if (!available) {
+      return res.status(409).json({
+        success: false,
+        message: 'This machine is already booked for that time',
+        code: 'BOOKING_SLOT_UNAVAILABLE',
+      });
+    }
+    const updated = await db.query(
+      `UPDATE bookings
+       SET machine_id=$2, start_at=$3, duration_minutes=$4, amount_cents=$5, currency=$6
+       WHERE id=$1 RETURNING *`,
+      [row.id, machineId, startAt, durationMinutes, quote.amountCents, quote.currency],
+    );
+    return res.json({ success: true, data: updated.rows[0] });
+  });
+  router.delete('/bookings/:id', requireAuth, async (req, res) => {
+    const auth = readAuthContext(req)!;
+    const found = await db.query('SELECT * FROM bookings WHERE id=$1', [req.params.id]);
+    const row = found.rows[0];
+    if (!row) {
+      return res.status(404).json({ success: false, message: 'Booking not found', code: 'BOOKING_NOT_FOUND' });
+    }
+    if (!canManageBooking(auth.roles, auth.subject, row.user_id)) {
+      return res.status(403).json({ success: false, message: 'You can only change your own booking', code: 'BOOKING_FORBIDDEN' });
+    }
+    if (row.status === 'CONFIRMED') {
+      const cancelled = await db.query(
+        `UPDATE bookings SET status='CANCELLED' WHERE id=$1 RETURNING *`,
+        [row.id],
+      );
+      return res.json({ success: true, data: cancelled.rows[0] });
+    }
+    await db.query('DELETE FROM bookings WHERE id=$1', [row.id]);
+    return res.status(204).send();
+  });
   router.get('/bookings/:id', requireAuth, async (req, res) => {
     const auth = readAuthContext(req)!;
     const found = await db.query('SELECT * FROM bookings WHERE id=$1', [req.params.id]);
@@ -172,5 +253,17 @@ export function bookingRoutes(
     res.json({ success: true, data: (await db.query(sql, values)).rows });
   });
   return router;
+}
+
+function canManageBooking(
+  roles: { has(role: 'ADMIN' | 'STAFF'): boolean },
+  subject: string,
+  ownerId: string,
+) {
+  return roles.has('ADMIN') || roles.has('STAFF') || subject === ownerId;
+}
+
+function editableStatus(status: string) {
+  return status === 'PENDING_PAYMENT' || status === 'PAYMENT_FAILED';
 }
 
