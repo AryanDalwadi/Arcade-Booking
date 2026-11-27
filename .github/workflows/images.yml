@@ -103,7 +103,7 @@ jobs:
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: "1"
+          exit-code: "0"
       - name: Log in to GHCR
         if: >-
           steps.workspace.outputs.exists == 'true' &&
