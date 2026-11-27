@@ -155,6 +155,17 @@ export const createVenueBlackoutSchema = z.object({
   reason: z.string().trim().max(200).optional(),
 });
 
+export const createPartyBookingSchema = z.object({
+  venueId: z.uuid(),
+  packageCode: packageCodeSchema,
+  guestCount: z.number().int().min(1).max(500),
+  startAt: z.iso.datetime(),
+  partyRoomId: z.uuid().optional(),
+  customerEmail: z.email().optional(),
+});
+
+export const partyStartClocks = ['11:00', '15:00', '19:00'] as const;
+
 export const bookingRulesSchema = z.object({
   holdMinutes: z.number().int().min(1).max(120),
   minGuests: z.number().int().min(1).max(500),
@@ -183,5 +194,6 @@ export type CreatePartyRoom = z.infer<typeof createPartyRoomSchema>;
 export type UpdatePartyRoom = z.infer<typeof updatePartyRoomSchema>;
 export type VenueHour = z.infer<typeof venueHourSchema>;
 export type VenueBlackout = z.infer<typeof venueBlackoutSchema>;
+export type CreatePartyBooking = z.infer<typeof createPartyBookingSchema>;
 export type CreateVenueBlackout = z.infer<typeof createVenueBlackoutSchema>;
 export type BookingRules = z.infer<typeof bookingRulesSchema>;

@@ -7,7 +7,7 @@ import { RedisAdapter } from './adapters/redis';
 import { CatalogClient } from './adapters/catalog';
 import { InventoryClient } from './adapters/inventory';
 import { createHttpApp } from './http/app';
-import { bookingRoutes, handleBookingEvent } from './application/context';
+import { bookingRoutes, expireHeldBookings, handleBookingEvent } from './application/context';
 
 const db = new Postgres(env.DATABASE_URL);
 const kafka = new KafkaAdapter(env.KAFKA_CLIENT_ID, env.KAFKA_BROKERS.split(',').map((x) => x.trim()));
@@ -17,6 +17,7 @@ const inventory = new InventoryClient(env.INVENTORY_SERVICE_URL);
 let dependencyReady = false;
 let acceptingTraffic = true;
 let relayTimer: NodeJS.Timeout | undefined;
+let holdTimer: NodeJS.Timeout | undefined;
 async function relayOutbox() {
   const pending = await db.query<{event_id:string;topic:string;payload:unknown}>(
     'SELECT event_id,topic,payload FROM outbox WHERE published_at IS NULL ORDER BY created_at LIMIT 50',
@@ -47,6 +48,10 @@ async function connectDependencies() {
         service: 'booking',
         error: error instanceof Error ? error.message : String(error),
       })), 1_000);
+      holdTimer = setInterval(() => void expireHeldBookings(db).catch((error) => log('error', 'booking.hold.expire.failed', {
+        service: 'booking',
+        error: error instanceof Error ? error.message : String(error),
+      })), 5_000);
     } catch (error) {
       dependencyReady = false;
       log('error', 'dependency.startup.failed', {
@@ -62,7 +67,7 @@ const app = createHttpApp({
   dbReady: () => db.ready(),
   dependencyReady: () => dependencyReady,
   acceptingTraffic: () => acceptingTraffic,
-  routes: bookingRoutes(db, redis, catalog, inventory),
+  routes: bookingRoutes(db, redis, catalog, inventory, catalog),
 });
 const server = createServer(app);
 server.listen(env.PORT, () => log('info', 'service.listen', {
@@ -77,6 +82,7 @@ installShutdown(server, {
   stopAccepting: () => {
     acceptingTraffic = false;
     if (relayTimer) clearInterval(relayTimer);
+    if (holdTimer) clearInterval(holdTimer);
   },
   closeResources: async () => {
     await Promise.allSettled([db.close(), kafka.close(), redis.close()]);

@@ -161,6 +161,23 @@ services:
       timeout: 5s
       retries: 5
 
+  site:
+    build:
+      context: ..
+      dockerfile: apps/site/Dockerfile
+      args:
+        VITE_API_GATEWAY_URL: http://localhost:4000
+        GIT_SHA: "${GIT_SHA:-local}"
+    restart: unless-stopped
+    stop_grace_period: 10s
+    networks: [application]
+    ports: ["3001:8080"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   gateway:
     <<: *node-service
     build:
@@ -174,7 +191,7 @@ services:
       JWT_SECRET: "${JWT_SECRET:-local-compose-secret-change-me-32-chars}"
       JWT_ISSUER: arcade-identity
       JWT_AUDIENCE: arcade-web
-      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://localhost:5174
       IDENTITY_SERVICE_URL: http://identity:4101
       CATALOG_SERVICE_URL: http://catalog:4102
       BOOKING_SERVICE_URL: http://booking:4103

@@ -8,6 +8,19 @@ const publicPaths = new Set([
   '/api/payment/webhooks/razorpay',
 ]);
 
+const publicCatalogRead = /^\/api\/catalog\/(?:venues(?:\/slug\/[^/]+|\/[^/]+(?:\/(?:hours|rooms|packages|blackouts))?|)|party-types|inclusions|package-templates|booking-rules|machines(?:\/[^/]+\/quote)?)$/;
+const publicPartySlots = /^\/api\/booking\/party-slots$/;
+const publicPartyHold = /^\/api\/booking\/party-holds(?:\/[^/]+\/release)?$/;
+
+function isPublicPartyAccess(method: string, path: string): boolean {
+  if (method === 'GET' && publicPartySlots.test(path)) return true;
+  return method === 'POST' && publicPartyHold.test(path);
+}
+
+export function isPublicCatalogRead(method: string, path: string): boolean {
+  return method === 'GET' && publicCatalogRead.test(path);
+}
+
 export function verifyJwt(config: GatewayConfig) {
   const options: VerifyOptions = {};
   if (config.JWT_ISSUER) options.issuer = config.JWT_ISSUER;
@@ -25,6 +38,10 @@ export function verifyJwt(config: GatewayConfig) {
     }
     const [scheme, token] = request.headers.authorization?.split(' ') ?? [];
     if (scheme !== 'Bearer' || !token) {
+      if (isPublicCatalogRead(request.method, request.path) || isPublicPartyAccess(request.method, request.path)) {
+        next();
+        return;
+      }
       response.status(401).json({ success: false, message: 'Bearer token required', code: 'UNAUTHORIZED' });
       return;
     }

@@ -166,15 +166,24 @@ async function paymentForBooking(db: Postgres, bookingId: string): Promise<Payme
   return found.rows[0];
 }
 
+class HoldExpiredError extends Error {
+  constructor() {
+    super('This reservation time ran out. Choose the time again.');
+  }
+}
+
 async function loadOrCreatePayment(
   db: Postgres,
   bookingId: string,
   auth: AuthContext,
   options: PaymentRouteOptions,
 ): Promise<PaymentRow | undefined> {
+  const booking = await options.lookupPayableBooking?.(bookingId, auth);
+  if (booking?.holdExpiresAt && Date.parse(booking.holdExpiresAt) <= Date.now()) {
+    throw new HoldExpiredError();
+  }
   const existing = await paymentForBooking(db, bookingId);
   if (existing) return existing;
-  const booking = await options.lookupPayableBooking?.(bookingId, auth);
   if (!booking) return undefined;
   if (booking.status !== 'PENDING_PAYMENT' && booking.status !== 'PAYMENT_FAILED') return undefined;
   const staff = auth.roles.has('ADMIN') || auth.roles.has('STAFF');
@@ -246,7 +255,15 @@ export function paymentRoutes(db: Postgres, options: PaymentRouteOptions): Route
   router.post('/orders', requireAuth, async (req, res) => {
     const auth = readAuthContext(req)!;
     const input = createPaymentOrderSchema.parse(req.body);
-    const payment = await loadOrCreatePayment(db, input.bookingId, auth, options);
+    let payment;
+    try {
+      payment = await loadOrCreatePayment(db, input.bookingId, auth, options);
+    } catch (error) {
+      if (error instanceof HoldExpiredError) {
+        return res.status(409).json({ success: false, message: error.message, code: 'HOLD_EXPIRED' });
+      }
+      throw error;
+    }
     if (!payment) {
       return res.status(404).json({ success: false, message: 'No payable booking was found', code: 'PAYMENT_NOT_FOUND' });
     }

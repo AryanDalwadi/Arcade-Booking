@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { gameSchema, machineQuoteSchema, machineSchema, pricingSchema, updateMachineSchema } from '@arcade/contracts';
-import { requireAuth, requireAnyRole } from '@arcade/service-auth';
+import { hasAnyRole, requireAuth, requireAnyRole } from '@arcade/service-auth';
 import { Postgres } from '../adapters/postgres';
 import { RedisAdapter } from '../adapters/redis';
 import { partyRoutes } from './parties';
@@ -15,18 +15,23 @@ const machineListSql = `SELECT m.id, m.name, m.status,
 
 export function catalogRoutes(db: Postgres, redis: RedisAdapter): Router {
   const router = Router();
-  router.get('/machines', requireAuth, async (_req, res) => {
+  router.get('/machines', async (req, res) => {
+    const staff = hasAnyRole(req, ['ADMIN', 'STAFF']);
+    const publish = (rows: Array<{ status?: string }>, cache: string) => {
+      const data = staff ? rows : rows.filter((row) => row.status === undefined || row.status === 'ACTIVE');
+      return res.json({ success: true, data, cache });
+    };
     const cached = await redis.get(machinesCacheKey);
     if (cached) {
       try {
-        return res.json({ success: true, data: JSON.parse(cached), cache: 'hit' });
+        return publish(JSON.parse(cached) as Array<{ status?: string }>, 'hit');
       } catch {
         await redis.delete(machinesCacheKey);
       }
     }
     const rows = (await db.query(machineListSql)).rows;
     await redis.set(machinesCacheKey, JSON.stringify(rows), 60);
-    return res.json({ success: true, data: rows, cache: redis.isReady() ? 'miss' : 'bypass' });
+    return publish(rows, redis.isReady() ? 'miss' : 'bypass');
   });
   router.get('/machines/:machineId/quote', async (req, res) => {
     const durationMinutes = Number(req.query.durationMinutes);

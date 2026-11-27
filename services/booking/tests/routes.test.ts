@@ -119,6 +119,7 @@ describe('booking ownership and pricing', () => {
       60,
       24000,
       'INR',
+      10,
     ]);
   });
 

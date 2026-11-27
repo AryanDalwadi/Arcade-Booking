@@ -55,6 +55,7 @@ describe('protected routing and sessions', () => {
     await user.click(screen.getByRole('button', { name: 'Enter arcade →' }));
 
     expect(await screen.findByRole('heading', { name: 'My arcade dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Account menu' })).toBeInTheDocument();
     expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('jwt-token');
     expect(JSON.parse(localStorage.getItem(AUTH_USER_KEY) ?? '{}')).toMatchObject(sessionUser);
   });
@@ -81,10 +82,14 @@ describe('protected routing and sessions', () => {
     const admin = { ...sessionUser, roles: ['CUSTOMER', 'ADMIN'] };
     localStorage.setItem(AUTH_TOKEN_KEY, 'admin-token');
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(admin));
+    const user = userEvent.setup();
     renderApp('/admin/users');
 
     expect(await screen.findByRole('heading', { name: 'Users' })).toBeInTheDocument();
     expect(await screen.findByRole('link', { name: /User Groups/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Account menu' }));
+    expect(screen.getByText(admin.email)).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument();
   });
 
   it('sends an administrator to the admin portal even if login started from a customer path', async () => {

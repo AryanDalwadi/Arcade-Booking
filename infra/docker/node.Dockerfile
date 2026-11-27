@@ -12,6 +12,7 @@ COPY packages/contracts/package.json packages/contracts/
 COPY packages/service-auth/package.json packages/service-auth/
 COPY packages/observability/package.json packages/observability/
 COPY apps/web/package.json apps/web/
+COPY apps/site/package.json apps/site/
 COPY apps/api-gateway/package.json apps/api-gateway/
 COPY services/identity/package.json services/identity/
 COPY services/catalog/package.json services/catalog/

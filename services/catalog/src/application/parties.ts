@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import type { QueryResultRow } from 'pg';
 import {
   bookingRulesSchema,
@@ -25,7 +25,7 @@ import {
   type VenueBlackout,
   type VenuePackage,
 } from '@arcade/contracts';
-import { requireAnyRole, requireAuth } from '@arcade/service-auth';
+import { hasAnyRole, requireAnyRole } from '@arcade/service-auth';
 import { Postgres } from '../adapters/postgres';
 
 type Sql = {
@@ -99,10 +99,10 @@ export function partyRoutes(db: Postgres): Router {
   const router = Router();
   const staff = requireAnyRole('ADMIN', 'STAFF');
 
-  router.get('/party-types', requireAuth, async (_req, res) => {
+  router.get('/party-types', async (req, res) => {
     const rows = (await db.query<PartyType>(
       `SELECT id, code, title, description, sort_order AS "sortOrder", active
-       FROM party_types ORDER BY sort_order`,
+       FROM party_types ${visitorWhere(req)} ORDER BY sort_order`,
     )).rows;
     res.json({ success: true, data: rows });
   });
@@ -152,10 +152,10 @@ export function partyRoutes(db: Postgres): Router {
     return res.status(204).send();
   });
 
-  router.get('/inclusions', requireAuth, async (_req, res) => {
+  router.get('/inclusions', async (req, res) => {
     const rows = (await db.query<Inclusion>(
       `SELECT id, name, description, sort_order AS "sortOrder", active
-       FROM inclusions ORDER BY sort_order, name`,
+       FROM inclusions ${visitorWhere(req)} ORDER BY sort_order, name`,
     )).rows;
     res.json({ success: true, data: rows });
   });
@@ -215,8 +215,10 @@ export function partyRoutes(db: Postgres): Router {
     return res.status(204).send();
   });
 
-  router.get('/package-templates', requireAuth, async (_req, res) => {
-    const rows = (await db.query<PackageRow>(`SELECT ${templateColumns} FROM package_templates ORDER BY sort_order`)).rows;
+  router.get('/package-templates', async (req, res) => {
+    const rows = (await db.query<PackageRow>(
+      `SELECT ${templateColumns} FROM package_templates ${visitorWhere(req)} ORDER BY sort_order`,
+    )).rows;
     res.json({ success: true, data: rows.map(mapTemplate) });
   });
 
@@ -300,7 +302,7 @@ export function partyRoutes(db: Postgres): Router {
     return res.status(204).send();
   });
 
-  router.get('/booking-rules', requireAuth, async (_req, res) => {
+  router.get('/booking-rules', async (_req, res) => {
     const row = (await db.query<BookingRules>(
       `SELECT hold_minutes AS "holdMinutes", min_guests AS "minGuests",
               slot_minutes AS "slotMinutes", refund_policy AS "refundPolicy"
@@ -326,8 +328,10 @@ export function partyRoutes(db: Postgres): Router {
     return res.json({ success: true, data: row });
   });
 
-  router.get('/venues', requireAuth, async (_req, res) => {
-    const rows = (await db.query<VenueRow>(`SELECT ${venueColumns} FROM venues v ORDER BY v.name`)).rows;
+  router.get('/venues', async (req, res) => {
+    const rows = (await db.query<VenueRow>(
+      `SELECT ${venueColumns} FROM venues v ${visitorWhere(req, 'v.active')} ORDER BY v.name`,
+    )).rows;
     res.json({ success: true, data: rows.map(mapVenue) });
   });
 
@@ -372,8 +376,18 @@ export function partyRoutes(db: Postgres): Router {
     }
   });
 
-  router.get('/venues/:venueId', requireAuth, async (req, res) => {
-    const venue = await loadVenue(db, String(req.params.venueId));
+  router.get('/venues/slug/:slug', async (req, res) => {
+    const row = (await db.query<VenueRow>(
+      `SELECT ${venueColumns} FROM venues v WHERE v.slug=$1`,
+      [req.params.slug],
+    )).rows[0];
+    const venue = publishedVenue(req, row ? mapVenue(row) : null);
+    if (!venue) return res.status(404).json({ success: false, message: 'Venue was not found', code: 'VENUE_NOT_FOUND' });
+    return res.json({ success: true, data: venue });
+  });
+
+  router.get('/venues/:venueId', async (req, res) => {
+    const venue = publishedVenue(req, await loadVenue(db, String(req.params.venueId)));
     if (!venue) return res.status(404).json({ success: false, message: 'Venue was not found', code: 'VENUE_NOT_FOUND' });
     return res.json({ success: true, data: venue });
   });
@@ -425,15 +439,15 @@ export function partyRoutes(db: Postgres): Router {
     return res.status(204).send();
   });
 
-  router.get('/venues/:venueId/packages', requireAuth, async (req, res) => {
-    if (!(await loadVenue(db, String(req.params.venueId)))) {
+  router.get('/venues/:venueId/packages', async (req, res) => {
+    if (!publishedVenue(req, await loadVenue(db, String(req.params.venueId)))) {
       return res.status(404).json({ success: false, message: 'Venue was not found', code: 'VENUE_NOT_FOUND' });
     }
     const rows = (await db.query<PackageRow>(
       `SELECT ${packageColumns} FROM venue_packages WHERE venue_id=$1 ORDER BY sort_order`,
       [req.params.venueId],
-    )).rows;
-    return res.json({ success: true, data: rows.map(mapVenuePackage) });
+    )).rows.map(mapVenuePackage);
+    return res.json({ success: true, data: isStaff(req) ? rows : rows.filter((row) => row.active) });
   });
 
   router.patch('/venues/:venueId/packages/:code', staff, async (req, res) => {
@@ -510,8 +524,8 @@ export function partyRoutes(db: Postgres): Router {
     return res.json({ success: true, data: reset });
   });
 
-  router.get('/venues/:venueId/rooms', requireAuth, async (req, res) => {
-    if (!(await loadVenue(db, String(req.params.venueId)))) {
+  router.get('/venues/:venueId/rooms', async (req, res) => {
+    if (!publishedVenue(req, await loadVenue(db, String(req.params.venueId)))) {
       return res.status(404).json({ success: false, message: 'Venue was not found', code: 'VENUE_NOT_FOUND' });
     }
     const rows = (await db.query<PartyRoom>(
@@ -519,7 +533,7 @@ export function partyRoutes(db: Postgres): Router {
        FROM party_rooms WHERE venue_id=$1 ORDER BY name`,
       [req.params.venueId],
     )).rows;
-    return res.json({ success: true, data: rows });
+    return res.json({ success: true, data: isStaff(req) ? rows : rows.filter((row) => row.active) });
   });
 
   router.post('/venues/:venueId/rooms', staff, async (req, res) => {
@@ -560,8 +574,8 @@ export function partyRoutes(db: Postgres): Router {
     return res.status(204).send();
   });
 
-  router.get('/venues/:venueId/hours', requireAuth, async (req, res) => {
-    if (!(await loadVenue(db, String(req.params.venueId)))) {
+  router.get('/venues/:venueId/hours', async (req, res) => {
+    if (!publishedVenue(req, await loadVenue(db, String(req.params.venueId)))) {
       return res.status(404).json({ success: false, message: 'Venue was not found', code: 'VENUE_NOT_FOUND' });
     }
     const rows = (await db.query<{
@@ -598,8 +612,8 @@ export function partyRoutes(db: Postgres): Router {
     return res.json({ success: true, data: input });
   });
 
-  router.get('/venues/:venueId/blackouts', requireAuth, async (req, res) => {
-    if (!(await loadVenue(db, String(req.params.venueId)))) {
+  router.get('/venues/:venueId/blackouts', async (req, res) => {
+    if (!publishedVenue(req, await loadVenue(db, String(req.params.venueId)))) {
       return res.status(404).json({ success: false, message: 'Venue was not found', code: 'VENUE_NOT_FOUND' });
     }
     const rows = (await db.query<{ id: string; venueId: string; blackoutDate: string; reason: string }>(
@@ -644,6 +658,20 @@ export function partyRoutes(db: Postgres): Router {
   });
 
   return router;
+}
+
+function isStaff(req: Request) {
+  return hasAnyRole(req, ['ADMIN', 'STAFF']);
+}
+
+function visitorWhere(req: Request, column = 'active') {
+  return isStaff(req) ? '' : `WHERE ${column}`;
+}
+
+function publishedVenue(req: Request, venue: Venue | null): Venue | null {
+  if (!venue) return null;
+  if (!venue.active && !isStaff(req)) return null;
+  return venue;
 }
 
 async function loadVenue(db: Postgres, venueId: string): Promise<Venue | null> {

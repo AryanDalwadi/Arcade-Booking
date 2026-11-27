@@ -6,7 +6,7 @@ const booleanString = z.enum(['true', 'false']).transform((value) => value === '
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().max(65535).default(8080),
-  CORS_ORIGINS: z.string().default('http://localhost:5173'),
+  CORS_ORIGINS: z.string().default('http://localhost:5173,http://localhost:5174'),
   JWT_SECRET: z.string().min(16).default('local-only-change-me'),
   JWT_ISSUER: z.string().optional(),
   JWT_AUDIENCE: z.string().optional(),

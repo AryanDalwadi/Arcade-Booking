@@ -48,7 +48,7 @@ describe('API gateway', () => {
 
   it('protects service routes', async () => {
     const origin = await serve();
-    const response = await fetch(`${origin}/api/catalog/machines`);
+    const response = await fetch(`${origin}/api/booking/bookings`);
     expect(response.status).toBe(401);
     expect(await response.json()).toMatchObject({ code: 'UNAUTHORIZED' });
   });
@@ -62,6 +62,17 @@ describe('API gateway', () => {
     const response = await fetch(`${origin}/api/identity/auth/login`, { method: 'POST' });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ path: '/v1/auth/login' });
+  });
+
+  it('proxies guest catalog reads without a token', async () => {
+    const upstream = await serveUpstream((request, response) => {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ path: request.url, subject: request.headers['x-auth-subject'] ?? null }));
+    });
+    const origin = await serve({ CATALOG_SERVICE_URL: upstream });
+    const response = await fetch(`${origin}/api/catalog/venues`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ path: '/v1/venues', subject: null });
   });
 
   it('forwards verified identity claims to protected services', async () => {
@@ -207,8 +218,8 @@ describe('API gateway', () => {
 
   it('limits repeated requests by client', async () => {
     const origin = await serve({ RATE_LIMIT_MAX: '1' });
-    expect((await fetch(`${origin}/api/catalog/machines`)).status).toBe(401);
-    expect((await fetch(`${origin}/api/catalog/machines`)).status).toBe(429);
+    expect((await fetch(`${origin}/api/booking/bookings`)).status).toBe(401);
+    expect((await fetch(`${origin}/api/booking/bookings`)).status).toBe(429);
   });
 
   it('fails open when the rate-limit store is unavailable', async () => {
@@ -221,7 +232,7 @@ describe('API gateway', () => {
     servers.push(server);
     await new Promise<void>((resolve) => server.once('listening', resolve));
     const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-    expect((await fetch(`${origin}/api/catalog/machines`)).status).toBe(401);
-    expect((await fetch(`${origin}/api/catalog/machines`)).status).toBe(401);
+    expect((await fetch(`${origin}/api/booking/bookings`)).status).toBe(401);
+    expect((await fetch(`${origin}/api/booking/bookings`)).status).toBe(401);
   });
 });

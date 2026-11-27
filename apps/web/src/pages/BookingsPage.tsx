@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import type { Booking } from '@arcade/contracts';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { FilterBar, FilterSelect, FilterTextInput } from '../components/FilterBar';
 import { Modal } from '../components/Modal';
@@ -66,8 +65,8 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
   const [pageSize, setPageSize] = useState(15);
   const [page, setPage] = useState(1);
   const [dialogMode, setDialogMode] = useState<DialogMode>('closed');
-  const [selected, setSelected] = useState<Booking | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Booking | null>(null);
+  const [selected, setSelected] = useState<BookingListItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BookingListItem | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [customerId, setCustomerId] = useState('');
   const [machineId, setMachineId] = useState('');
@@ -153,7 +152,7 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
     return visibleBookings.filter((booking) => {
       if (statusFilter !== 'ALL' && booking.status !== statusFilter) return false;
       if (machineTerm) {
-        const machineName = machines.find((machine) => machine.id === booking.machineId)?.name ?? booking.machineId;
+        const machineName = bookingLabel(booking, machines);
         if (!machineName.toLowerCase().includes(machineTerm)) return false;
       }
       if (portal === 'admin' && playerTerm) {
@@ -181,7 +180,8 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
     setDialogMode('create');
   }
 
-  function openEdit(booking: Booking) {
+  function openEdit(booking: BookingListItem) {
+    if (!booking.machineId) return;
     setSelected(booking);
     setCustomerId(booking.userId);
     setMachineId(booking.machineId);
@@ -297,7 +297,7 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
           {portal === 'admin' && (
             <FilterTextInput label="Player" value={playerFilter} onChange={(value) => { setPlayerFilter(value); setPage(1); }} placeholder="Filter player…" />
           )}
-          <FilterTextInput label="Machine" value={machineFilter} onChange={(value) => { setMachineFilter(value); setPage(1); }} placeholder="Filter machine…" />
+          <FilterTextInput label="Machine / party" value={machineFilter} onChange={(value) => { setMachineFilter(value); setPage(1); }} placeholder="Filter machine or party…" />
           <FilterSelect label="Status" value={statusFilter} onChange={(value) => { setStatusFilter(value); setPage(1); }} options={statusOptions} />
         </div>
       </FilterBar>
@@ -331,7 +331,7 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
                 {showActions && <th className={thClass}>Actions</th>}
                 <th className={thClass}>Sr. No.</th>
                 {portal === 'admin' && <th className={thClass}>User</th>}
-                <th className={thClass}>Machine</th>
+                <th className={thClass}>Machine / party</th>
                 <th className={thClass}>Start</th>
                 <th className={thClass}>Duration</th>
                 <th className={thClass}>Amount</th>
@@ -346,7 +346,7 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
               )}
               {pageRows.map((booking, index) => {
                 const captured = paymentCaptured(booking);
-                const editable = canEdit && !captured && (booking.status === 'PENDING_PAYMENT' || booking.status === 'PAYMENT_FAILED');
+                const editable = canEdit && !captured && Boolean(booking.machineId) && (booking.status === 'PENDING_PAYMENT' || booking.status === 'PAYMENT_FAILED');
                 const removable = canDelete && !captured && booking.status !== 'CANCELLED';
                 return (
                   <tr key={booking.id} className="hover:bg-white/2">
@@ -360,7 +360,7 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
                     )}
                     <td className={cellClass}>{(currentPage - 1) * pageSize + index + 1}</td>
                     {portal === 'admin' && <td className={cellClass}>{userLabel(booking.userId, users)}</td>}
-                    <td className={cellClass}>{machines.find((machine) => machine.id === booking.machineId)?.name ?? booking.machineId}</td>
+                    <td className={cellClass}>{bookingLabel(booking, machines)}</td>
                     <td className={cellClass}>{new Date(booking.startAt).toLocaleString()}</td>
                     <td className={cellClass}>{booking.durationMinutes} min</td>
                     <td className={cellClass}>{formatMoney(booking.amountCents, booking.currency)}</td>
@@ -466,6 +466,15 @@ export function BookingsPage({ portal }: { portal: 'customer' | 'admin' }) {
       />
     </>
   );
+}
+
+function bookingLabel(booking: BookingListItem, machines: { id: string; name: string }[]): string {
+  if (booking.packageCode) {
+    const guests = booking.guestCount ? ` · ${booking.guestCount} guests` : '';
+    return `${booking.packageCode} party${guests}`;
+  }
+  if (!booking.machineId) return 'Party';
+  return machines.find((machine) => machine.id === booking.machineId)?.name ?? booking.machineId;
 }
 
 function userLabel(userId: string, users: { id: string; displayName: string; email: string }[]): string {

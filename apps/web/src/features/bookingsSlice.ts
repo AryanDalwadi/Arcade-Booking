@@ -23,13 +23,20 @@ const initialState: BookingState = {
   mutationError: null,
 };
 
-export type BookingListItem = Booking & {
+export type BookingListItem = Omit<Booking, 'machineId'> & {
+  machineId: string | null;
+  venueId: string | null;
+  packageCode: string | null;
+  guestCount: number | null;
   paymentStatus?: 'PENDING' | 'COMPLETED' | 'FAILED';
 };
 
 type BookingWire = Partial<BookingListItem> & {
   user_id?: string;
-  machine_id?: string;
+  machine_id?: string | null;
+  venue_id?: string | null;
+  package_code?: string | null;
+  guest_count?: number | null;
   start_at?: string;
   duration_minutes?: number;
   amount_cents?: number;
@@ -42,11 +49,20 @@ function paymentStatusOf(value: string | undefined): BookingListItem['paymentSta
   return undefined;
 }
 
+function textOrNull(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  return value;
+}
+
 function normalizeBooking(value: BookingWire): BookingListItem {
+  const guestCount = value.guestCount ?? value.guest_count;
   return {
     id: String(value.id),
     userId: String(value.userId ?? value.user_id),
-    machineId: String(value.machineId ?? value.machine_id),
+    machineId: textOrNull(value.machineId ?? value.machine_id),
+    venueId: textOrNull(value.venueId ?? value.venue_id),
+    packageCode: textOrNull(value.packageCode ?? value.package_code),
+    guestCount: guestCount == null ? null : Number(guestCount),
     startAt: new Date(String(value.startAt ?? value.start_at)).toISOString(),
     durationMinutes: Number(value.durationMinutes ?? value.duration_minutes),
     amountCents: Number(value.amountCents ?? value.amount_cents),
