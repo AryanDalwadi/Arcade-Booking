@@ -16,6 +16,7 @@
     "build": "npm run build --workspaces --if-present",
     "dev:gateway": "npm run dev -w @arcade/api-gateway",
     "dev:web": "npm run dev -w @arcade/web",
+    "dev:site": "npm run dev -w @arcade/site",
     "dev:services": "concurrently -n identity,catalog,booking,payment,notification,inventory,analytics \"npm run dev -w @arcade/identity-service\" \"npm run dev -w @arcade/catalog-service\" \"npm run dev -w @arcade/booking-service\" \"npm run dev -w @arcade/payment-service\" \"npm run dev -w @arcade/notification-service\" \"npm run dev -w @arcade/inventory-service\" \"npm run dev -w @arcade/analytics-service\"",
     "dev": "concurrently -n web,gateway,services \"npm run dev:web\" \"npm run dev:gateway\" \"npm run dev:services\"",
     "pretypecheck": "npm run build -w @arcade/contracts && npm run build -w @arcade/service-auth && npm run build -w @arcade/observability",

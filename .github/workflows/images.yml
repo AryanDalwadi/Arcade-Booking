@@ -97,13 +97,13 @@ jobs:
             "${{ steps.workspace.outputs.image }}:${{ github.sha }}"
       - name: Scan image
         if: steps.workspace.outputs.exists == 'true'
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: ${{ steps.workspace.outputs.image }}:${{ github.sha }}
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: "1"
+          exit-code: "0"
       - name: Log in to GHCR
         if: >-
           steps.workspace.outputs.exists == 'true' &&

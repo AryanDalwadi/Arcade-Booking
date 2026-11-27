@@ -7,6 +7,7 @@ export type PayableBooking = {
   amountCents: number;
   currency: string;
   status: string;
+  holdExpiresAt?: string;
 };
 
 type BookingWire = {
@@ -19,6 +20,8 @@ type BookingWire = {
   amount_cents?: number;
   currency?: string;
   status?: string;
+  holdExpiresAt?: string;
+  hold_expires_at?: string;
 };
 
 export function bookingLookup(baseUrl: string) {
@@ -43,12 +46,14 @@ export function bookingLookup(baseUrl: string) {
     if (!userId || !Number.isInteger(amountCents) || amountCents <= 0 || currency.length !== 3) {
       return null;
     }
+    const expiresAt = row.holdExpiresAt || row.hold_expires_at;
     return {
       id: String(row.id),
       userId,
       amountCents,
       currency,
       status: row.status,
+      ...(expiresAt ? { holdExpiresAt: new Date(expiresAt).toISOString() } : {}),
       ...(row.customerEmail ?? row.customer_email
         ? { customerEmail: String(row.customerEmail ?? row.customer_email) }
         : {}),

@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import type { MenuAccess } from '@arcade/contracts';
 import { BrandMark, cx } from './ui';
-import { logout } from '../features/authSlice';
+import { logout, type SessionUser } from '../features/authSlice';
 import { menuGrants } from '../features/menuAccess';
 import { buildMenuTree, type MenuNode } from '../features/menuTree';
 import { fetchMenuAccess } from '../features/menusSlice';
@@ -20,7 +20,6 @@ export function PortalLayout({ portal }: { portal: 'customer' | 'admin' }) {
   const menuAccess = useAppSelector((state) => state.menus.access);
   const accessStatus = useAppSelector((state) => state.menus.accessStatus);
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
@@ -61,28 +60,87 @@ export function PortalLayout({ portal }: { portal: 'customer' | 'admin' }) {
               </NavLink>
             ))}
         </nav>
-        <div className="mt-auto flex items-center gap-2.5 border-t border-line pt-5">
-          <div className="grid size-9 place-items-center rounded-full bg-violet font-display text-sm">
-            {user.displayName.charAt(0).toUpperCase()}
-          </div>
-          <div className="max-lg:hidden">
-            <strong className="block text-xs">{user.displayName}</strong>
-            <small className="mt-0.5 block text-xs text-faint">{user.roles.join(', ') || 'CUSTOMER'}</small>
-          </div>
-          <button
-            className="ml-auto border-0 bg-transparent text-muted max-lg:hidden"
-            title="Sign out"
-            onClick={() => {
-              dispatch(logout());
-              navigate('/login', { replace: true });
-            }}
-          >↗</button>
-        </div>
       </aside>
-      <main className="min-w-0 overflow-auto px-[clamp(24px,5vw,72px)] py-[42px] max-sm:px-4 max-sm:py-7">
-        <Outlet />
-      </main>
+      <div className="flex min-w-0 flex-col">
+        <AccountMenu user={user} />
+        <main className="min-w-0 overflow-auto px-[clamp(24px,5vw,72px)] py-[42px] max-sm:px-4 max-sm:py-7">
+          <Outlet />
+        </main>
+      </div>
     </div>
+  );
+}
+
+export function AccountMenu({ user }: { user: SessionUser }) {
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const role = user.roles.join(', ') || 'STAFF';
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  function signOut() {
+    setOpen(false);
+    dispatch(logout());
+    navigate('/login', { replace: true });
+  }
+
+  return (
+    <header className="sticky top-0 z-30 flex items-center justify-end border-b border-line bg-void-deep/95 px-[clamp(24px,5vw,72px)] py-3 max-sm:px-4">
+      <div ref={rootRef} className="relative">
+        <button
+          type="button"
+          className="flex items-center gap-2.5 rounded-full border border-line bg-panel py-1 pr-3 pl-1 text-left text-white"
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-label="Account menu"
+          onClick={() => setOpen((current) => !current)}
+        >
+          <span className="grid size-8 place-items-center rounded-full bg-violet font-display text-sm">
+            {user.displayName.charAt(0).toUpperCase()}
+          </span>
+          <span className="min-w-0 max-sm:hidden">
+            <strong className="block max-w-40 truncate text-sm">{user.displayName}</strong>
+            <small className="block text-[11px] text-faint">{role}</small>
+          </span>
+          <ChevronIcon className={cx('size-4 text-muted transition', open && 'rotate-180')} />
+        </button>
+        {open && (
+          <div role="menu" className="absolute top-full right-0 z-40 mt-2 w-72 rounded-lg border border-line bg-panel p-2 shadow-xl">
+            <div className="px-3 py-2">
+              <p className="m-0 text-[11px] tracking-[0.14em] text-faint uppercase">Signed in</p>
+              <p className="mt-1 mb-0 text-sm font-semibold text-white">{user.displayName}</p>
+              <p className="mt-1 mb-0 text-xs text-muted">{user.email}</p>
+              <p className="mt-1 mb-0 text-xs text-faint">{role}</p>
+            </div>
+            <div className="my-1 border-t border-line" />
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full rounded-md border-0 bg-transparent px-3 py-2 text-left text-sm text-white hover:bg-nav"
+              onClick={signOut}
+            >
+              Sign out
+            </button>
+          </div>
+        )}
+      </div>
+    </header>
   );
 }
 
